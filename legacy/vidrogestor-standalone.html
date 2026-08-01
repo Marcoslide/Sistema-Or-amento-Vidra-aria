@@ -416,28 +416,48 @@ const REGRAS={
   BARRA:{label:"Barra",dim:[],hint:"Preço da barra × quantidade de barras.",suf:"barra"},
   CAIXA:{label:"Caixa",dim:[],hint:"Preço da caixa × quantidade de caixas.",suf:"cx"},
   KIT:{label:"Kit",dim:[],hint:"Preço do kit × quantidade de kits.",suf:"kit"},
+  MOLDURA:{label:"Moldura (metro linear)",dim:["l","a"],hint:"Consumo por quadro = (2×largura + 2×altura) + (largura da moldura × multiplicador), em metros × quantidade.",suf:"m"},
 };
 const toM=(v,unit)=>{const x=num0(v);return unit==="mm"?x/1000:unit==="m"?x:x/100}; // cm padrão
 /* quantidade faturável de UMA medida conforme a regra */
-function qtdMedida(regra,m){
+/* multiplicador técnico efetivo de corte da moldura (padrão 8) */
+function molduraMult(prod){const v=num0(prod&&prod.multiplicadorCorte);return v>0?v:8;}
+/* acréscimo técnico de corte da moldura, em metros (largura da moldura × multiplicador) */
+function molduraAcrescimoM(prod){const lm=num0(prod&&prod.larguraMolduraCm);if(!(lm>0))return 0;return (lm*molduraMult(prod))/100;}
+function qtdMedida(regra,m,prod){
   const l=toM(m.l,m.unit),a=toM(m.a,m.unit),q=Math.max(0,Math.floor(num0(m.q))||0);
   switch(regra){
     case "M2":return l*a*q;
     case "ML":return l*q;
     case "PERIMETRO":return (2*l+2*a)*q;
+    case "MOLDURA":{const lm=num0(prod&&prod.larguraMolduraCm);if(!(l>0)||!(a>0)||!(lm>0)||!(q>0))return 0;return ((2*l+2*a)+molduraAcrescimoM(prod))*q;}
     default:return q;
   }
 }
 /* memória de cálculo textual de uma medida */
-function memoMedida(regra,m,preco){
-  const u=m.unit,q=Math.max(0,Math.floor(num0(m.q))||0),Q=qtdMedida(regra,m);
+function memoMedida(regra,m,preco,prod){
+  const u=m.unit,q=Math.max(0,Math.floor(num0(m.q))||0),Q=qtdMedida(regra,m,prod);
   const suf=REGRAS[regra].suf;
   if(regra==="M2")return `${num0(m.l)} ${u} × ${num0(m.a)} ${u} × ${q} = ${num(Q)} ${suf}`;
   if(regra==="ML")return `${num0(m.l)} ${u} × ${q} = ${num(Q)} ${suf}`;
   if(regra==="PERIMETRO")return `(2×${num0(m.l)} + 2×${num0(m.a)}) ${u} × ${q} = ${num(Q)} ${suf}`;
+  if(regra==="MOLDURA"){const per=r2(2*toM(m.l,m.unit)+2*toM(m.a,m.unit)),acr=r2(molduraAcrescimoM(prod));return `${num0(m.l)}×${num0(m.a)} ${u} • perím ${num(per,2)} m + acrésc ${num(acr,2)} m × ${q} = ${num(Q,2)} ${suf}`;}
   return `${q} ${suf}`;
 }
-function totalItem(it){const p=DB.prodById(it.produtoId);const preco=it.precoOverride!=null?it.precoOverride:(p?vendaPreco(p):0);const q=it.medidas.reduce((s,m)=>s+qtdMedida(it.regra,m),0);const bruto=q*preco;const desc=bruto*(num0(it.descPct)/100);return {q:r2(q),bruto:r2(bruto),desc:r2(desc),total:r2(bruto-desc),preco};}
+/* memória de cálculo detalhada (ficha interna) — MOLDURA */
+function memoMolduraDetalhe(m,prod,preco){
+  const l=num0(m.l),a=num0(m.a),u=m.unit,q=Math.max(0,Math.floor(num0(m.q))||0);
+  const lM=toM(m.l,m.unit),aM=toM(m.a,m.unit);
+  const perCm=r2((2*lM+2*aM)*100),lm=num0(prod&&prod.larguraMolduraCm),mult=molduraMult(prod);
+  const acrCm=r2(lm*mult),consumoCm=r2(perCm+acrCm),consumoM=r2(consumoCm/100),totalM=r2(consumoM*q);
+  const p=preco!=null?preco:(prod?vendaPreco(prod):0);
+  return `Perímetro: (${num(lM*100)} × 2) + (${num(aM*100)} × 2) = ${num(perCm)} cm\n`+
+         `Acréscimo técnico: ${num(lm)} × ${mult} = ${num(acrCm)} cm\n`+
+         `Consumo unitário: ${num(perCm)} + ${num(acrCm)} = ${num(consumoCm)} cm = ${num(consumoM,2)} m\n`+
+         `Quantidade: ${q} → consumo total ${num(totalM,2)} m\n`+
+         `Valor: ${num(totalM,2)} × ${money(p)} = ${money(r2(totalM*p))}`;
+}
+function totalItem(it){const p=DB.prodById(it.produtoId);const preco=it.precoOverride!=null?it.precoOverride:(p?vendaPreco(p):0);const q=it.medidas.reduce((s,m)=>s+qtdMedida(it.regra,m,p),0);const bruto=q*preco;const desc=bruto*(num0(it.descPct)/100);return {q:r2(q),bruto:r2(bruto),desc:r2(desc),total:r2(bruto-desc),preco};}
 /* medida potencialmente incoerente (ex.: cm digitado como metro) */
 function medidaSuspeita(regra,m){if(regra!=="M2"&&regra!=="PERIMETRO")return false;const l=toM(m.l,m.unit),a=toM(m.a,m.unit);return l>6||a>6||(l*a)>12;}
 </script>
@@ -523,12 +543,13 @@ const fornNomes=()=>DB.fornecedores.filter(f=>f.ativo!==false).map(f=>f.nome);
 const fornByNome=n=>DB.fornecedores.find(f=>f.nome===n);
 
 /* famílias (com regra de cálculo padrão) */
-function mkFam(o){return Object.assign({id:uid("fam"),nome:"",codigo:"",descricao:"",regra:"UN",unidade:"un",ativo:true,obs:""},o);}
+function mkFam(o){return Object.assign({id:uid("fam"),nome:"",codigo:"",descricao:"",regra:"UN",unidade:"un",multiplicadorPadrao:8,ativo:true,obs:""},o);}
 DB.familias=[
   mkFam({nome:"Vidros temperados",codigo:"VT",regra:"M2",unidade:"m²"}),
   mkFam({nome:"Vidros laminados",codigo:"VL",regra:"M2",unidade:"m²"}),
   mkFam({nome:"Espelhos",codigo:"ESP",regra:"M2",unidade:"m²"}),
   mkFam({nome:"Esquadrias de alumínio",codigo:"ESQ",regra:"M2",unidade:"m²"}),
+  mkFam({nome:"Molduras",codigo:"MLD",regra:"MOLDURA",unidade:"m",multiplicadorPadrao:8}),
   mkFam({nome:"Ferragens",codigo:"FER",regra:"UN",unidade:"peça"}),
   mkFam({nome:"Serviços",codigo:"SRV",regra:"UN",unidade:"un"}),
 ];
@@ -543,6 +564,7 @@ function mkProd(o){
   return Object.assign({
     codigo:o.codigo||"",fornecedor:o.fornecedor||"Genérico",localizacao:"",refLoja:"",ncm:"",cfop:"5102",obs:"",ativo:true,
     largura:0,comprimento:0,espessura:o.espCm||0,saldo:0,unidadeEstoque:(fam?fam.unidade:"un"),estoqueMin:0,
+    larguraMolduraCm:0,multiplicadorCorte:(fam&&fam.multiplicadorPadrao)||8,
     regra:o.regra||(fam?fam.regra:"UN"),
     custos:{avista:custoBase,d30:r2(custoBase*1.02),d60:r2(custoBase*1.04),d90:r2(custoBase*1.06),d120:r2(custoBase*1.08),d150:r2(custoBase*1.1)},
     descListaPct:0,custoBaseCond:"avista",custoBase,
@@ -562,6 +584,7 @@ function mkProd(o){
   {id:"p10",descricao:"Kit ferragem para porta de vidro",codigo:"KIT-PV",ref:"GEN-KPV",familia:"Ferragens",tipo:"Kit",fornecedor:"Genérico",regra:"KIT",preco:480,ativo:true},
   {id:"p11",descricao:"Instalação / mão de obra",codigo:"SRV-INST",ref:"SRV-01",familia:"Serviços",tipo:"Serviço",fornecedor:"Genérico",regra:"UN",preco:350,ativo:true},
   {id:"p12",descricao:"Acabamento em perímetro (lapidação)",codigo:"SRV-LAP",ref:"SRV-02",familia:"Serviços",tipo:"Serviço",fornecedor:"Genérico",regra:"PERIMETRO",preco:28,ativo:false},
+  {id:"p13",descricao:"Moldura preta 5 cm",codigo:"MLD-P5",ref:"MLD-5P",familia:"Molduras",tipo:"Moldura",fornecedor:"Genérico",regra:"MOLDURA",preco:30,custoBase:10,larguraMolduraCm:5,multiplicadorCorte:8,ativo:true},
 ].forEach(o=>DB.produtos.push(mkProd(o)));
 
 /* seed clientes */
@@ -1133,7 +1156,7 @@ VIEWS.acompanhamento=()=>{
   <div class="grid" style="grid-template-columns:2fr 1fr;gap:16px">
     <div style="display:flex;flex-direction:column;gap:16px">
       ${o.ambientes.map(a=>`<div class="card"><div class="card-h" style="display:flex;align-items:center;gap:8px">${svg("layers",16)}<div class="card-title">${esc(a.nome)}</div></div><div class="card-b" style="display:flex;flex-direction:column;gap:10px">
-        ${a.itens.map(it=>{const p=DB.prodById(it.produtoId),ci=totalItem(it);return `<div style="display:flex;justify-content:space-between;gap:14px;border:1px solid var(--border);border-radius:10px;padding:12px"><div><div style="font-weight:600">${esc(p?p.descricao:"—")}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${it.medidas.map(m=>memoMedida(it.regra,m)).join(" · ")}</div><div style="font-size:12px;color:var(--muted)">${num(ci.q)} ${REGRAS[it.regra].suf} × ${money(ci.preco)}</div></div><div style="font-weight:700" class="tnum">${money(ci.total)}</div></div>`}).join("")}
+        ${a.itens.map(it=>{const p=DB.prodById(it.produtoId),ci=totalItem(it);return `<div style="display:flex;justify-content:space-between;gap:14px;border:1px solid var(--border);border-radius:10px;padding:12px"><div><div style="font-weight:600">${esc(p?p.descricao:"—")}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${it.medidas.map(m=>memoMedida(it.regra,m,null,p)).join(" · ")}</div><div style="font-size:12px;color:var(--muted)">${num(ci.q)} ${REGRAS[it.regra].suf} × ${money(ci.preco)}</div></div><div style="font-weight:700" class="tnum">${money(ci.total)}</div></div>`}).join("")}
       </div></div>`).join("")}
       <div class="card"><div class="card-h" style="display:flex;justify-content:space-between;align-items:center"><div class="card-title">${o.vendaGerada?"Recebimentos":"Condição de pagamento (proposta)"}</div>${o.vendaGerada?btn("Registrar","btn-outline btn-sm","abrirRegReceb("+o.n+")","cash"):`<span class="badge b-muted">${STATUS_FIN[statusFin(o)][0]}</span>`}</div><div class="card-b" style="display:flex;flex-direction:column;gap:10px">
         ${o.vendaGerada?((o.recebimentos||[]).filter(r=>!r.estornado).length?o.recebimentos.filter(r=>!r.estornado).map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);border-radius:10px;padding:12px"><b style="font-weight:600">${FORMAS[r.forma]||r.forma} • ${r.data}${r.obs?" · "+esc(r.obs):""}</b><span style="font-weight:700;color:var(--success)" class="tnum">${money(r.valor)}</span></div>`).join(""):'<p style="color:var(--muted)">Venda gerada, sem recebimentos ainda. Saldo previsto em contas a receber.</p>')
@@ -1264,7 +1287,7 @@ function pdfCliente(o){const t=calcOrc(o);const titulo=o.vendaGerada?"PEDIDO / V
 function pdfProducao(o){const cliCad=DB.cliById(o.clienteId);const end=(cliCad&&cliCad.obras.find(x=>x.nome===o.obraNome));const p=o.producao;
   return `<div class="paper">${pdfHead(o,"ORDEM DE PRODUÇÃO")}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:18px 0"><div><div class="muted" style="font-size:10.5px;text-transform:uppercase;margin-bottom:4px">Cliente / Obra</div><b style="color:#0f172a">${esc(o.clienteNome)}</b><div class="muted" style="font-size:11.5px">${esc(o.obraNome||"—")}</div>${end?`<div class="muted" style="font-size:11px">${esc([end.endereco,end.numero,end.cidade].filter(Boolean).join(", "))}</div>`:""}${end&&end.resp?`<div class="muted" style="font-size:11px">Contato: ${esc(end.resp)}${end.respTel?" • "+esc(end.respTel):""}</div>`:""}</div><div><div class="muted" style="font-size:10.5px;text-transform:uppercase;margin-bottom:4px">Produção</div><div class="muted" style="font-size:11.5px">Responsável: ${esc((p&&p.resp)||o.vendNome||"—")}</div><div class="muted" style="font-size:11.5px">Previsão de entrega: ${prevEntregaTxt(o)}</div>${o.visita&&o.visita.data&&o.visita.status!=="CANCELADA"?`<div class="muted" style="font-size:11.5px">Visita técnica: ${o.visita.data}${o.visita.hora?" "+o.visita.hora:""}</div>`:""}</div></div>
-    ${o.ambientes.map(a=>`<div style="margin-bottom:14px"><div style="background:#f1f5f9;border-radius:4px;padding:6px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#475569;font-weight:600;margin-bottom:8px">${esc(a.nome)}</div><table style="width:100%"><thead><tr style="border-bottom:1px solid #e2e8f0;color:#94a3b8;font-size:10.5px;text-transform:uppercase"><th style="text-align:left;padding:6px 8px 6px 0">Produto</th><th style="text-align:left;padding:6px 8px">Medidas</th><th style="text-align:right;padding:6px 8px">Peças</th><th style="text-align:left;padding:6px 0 6px 8px">Espessura</th></tr></thead><tbody>${a.itens.map(it=>{const pr=DB.prodById(it.produtoId);return `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:9px 8px 9px 0"><b style="color:#1e293b">${esc(pr?pr.descricao:"—")}</b><div class="muted" style="font-size:10.5px">${REGRAS[it.regra].label}</div></td><td class="muted" style="font-size:11px;padding:9px 8px">${it.medidas.map(m=>memoMedida(it.regra,m)).join("; ")}</td><td style="text-align:right;padding:9px 8px" class="tnum">${pecasItem(it)}</td><td class="muted" style="font-size:11px;padding:9px 0 9px 8px">${pr&&pr.espessura?num(pr.espessura)+" cm":"—"}</td></tr>`}).join("")}</tbody></table></div>`).join("")}
+    ${o.ambientes.map(a=>`<div style="margin-bottom:14px"><div style="background:#f1f5f9;border-radius:4px;padding:6px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#475569;font-weight:600;margin-bottom:8px">${esc(a.nome)}</div><table style="width:100%"><thead><tr style="border-bottom:1px solid #e2e8f0;color:#94a3b8;font-size:10.5px;text-transform:uppercase"><th style="text-align:left;padding:6px 8px 6px 0">Produto</th><th style="text-align:left;padding:6px 8px">Medidas</th><th style="text-align:right;padding:6px 8px">Peças</th><th style="text-align:left;padding:6px 0 6px 8px">Espessura</th></tr></thead><tbody>${a.itens.map(it=>{const pr=DB.prodById(it.produtoId);return `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:9px 8px 9px 0"><b style="color:#1e293b">${esc(pr?pr.descricao:"—")}</b><div class="muted" style="font-size:10.5px">${REGRAS[it.regra].label}</div></td><td class="muted" style="font-size:11px;padding:9px 8px">${it.medidas.map(m=>memoMedida(it.regra,m,null,pr)).join("; ")}</td><td style="text-align:right;padding:9px 8px" class="tnum">${pecasItem(it)}</td><td class="muted" style="font-size:11px;padding:9px 0 9px 8px">${pr&&pr.espessura?num(pr.espessura)+" cm":"—"}</td></tr>`}).join("")}</tbody></table></div>`).join("")}
     ${p?`<div style="margin-top:18px"><div class="muted" style="font-size:10.5px;text-transform:uppercase;margin-bottom:6px">Etapas de produção</div><div style="display:flex;flex-wrap:wrap;gap:6px">${Object.entries(p.etapas).filter(([k,v])=>v!=="NA").map(([k,v])=>`<span style="border:1px solid #e2e8f0;border-radius:6px;padding:3px 9px;font-size:11px;color:#475569">${esc(k)}: ${(PROD_ST[v]||[v])[0]}</span>`).join("")||'<span class="muted" style="font-size:11px">—</span>'}</div></div>`:""}
     ${p&&p.terceirizacoes.length?`<div style="margin-top:16px"><div class="muted" style="font-size:10.5px;text-transform:uppercase;margin-bottom:6px">Terceirizações</div>${p.terceirizacoes.map(tc=>`<div style="font-size:11.5px;color:#475569;padding:2px 0">• ${esc(tc.desc||"Item")}${tc.fornecedor?" — "+esc(tc.fornecedor):""} <span class="muted">(${(TERC_ST[tc.status]||[tc.status])[0]})</span></div>`).join("")}</div>`:""}
     ${o.obs?`<div style="margin-top:18px;background:#f8fafc;border-radius:8px;padding:14px"><div class="muted" style="font-size:10.5px;text-transform:uppercase;margin-bottom:4px">Observações técnicas / instruções</div><p style="font-size:11.5px;color:#475569">${esc(o.obs)}</p></div>`:""}
@@ -1302,6 +1325,7 @@ function pfSeed(){
   if(EDIT_ID){PF=JSON.parse(JSON.stringify(DB.prodById(EDIT_ID)));PF.custos=PF.custos||{avista:0,d30:0,d60:0,d90:0,d120:0,d150:0};if(PF.precoVenda==null)PF.precoVenda=vendaPreco(PF);}
   else PF={id:null,descricao:"",codigo:"",fornecedor:"",localizacao:"",familia:"",refLoja:"",ncm:"",cfop:"5102",ativo:true,obs:"",
     largura:0,comprimento:0,espessura:0,saldo:0,unidadeEstoque:"un",estoqueMin:0,
+    larguraMolduraCm:0,multiplicadorCorte:8,
     regra:"M2",custos:{avista:0,d30:0,d60:0,d90:0,d120:0,d150:0},descListaPct:0,custoBaseCond:"avista",custoBase:0,
     precoVenda:0,markup:0,margem:0,lucro:0};
 }
@@ -1332,8 +1356,15 @@ VIEWS["produto-form"]=()=>{pfSeed();const isEdit=!!EDIT_ID;
     </div></div>
 
     <div class="card"><div class="card-h"><div class="card-title">Regra de cálculo</div><div class="card-desc">Vem da família; pode ser ajustada quando necessário. Define os campos de medida no orçamento.</div></div><div class="card-b">
-      <div class="grid g2"><div><label class="lbl">Regra</label><select class="inp" id="pf-regra" onchange="PF.regra=this.value;document.getElementById('regra-hint').textContent=REGRAS[this.value].hint">${Object.keys(REGRAS).map(r=>`<option value="${r}" ${PF.regra===r?"selected":""}>${REGRAS[r].label}</option>`).join("")}</select></div><div style="align-self:end"><div class="field-err" id="err-regra"></div></div></div>
+      <div class="grid g2"><div><label class="lbl">Regra</label><select class="inp" id="pf-regra" onchange="pfRegraChange(this.value)">${Object.keys(REGRAS).map(r=>`<option value="${r}" ${PF.regra===r?"selected":""}>${REGRAS[r].label}</option>`).join("")}</select></div><div style="align-self:end"><div class="field-err" id="err-regra"></div></div></div>
       <div class="hint" style="margin-top:12px" id="regra-hint">${REGRAS[PF.regra].hint}</div>
+      <div id="pf-moldura-wrap" style="margin-top:14px;display:${PF.regra==="MOLDURA"?"block":"none"}">
+        <div class="grid g2">
+          <div><label class="lbl">Largura da moldura (perfil frontal)</label><div class="inp-cm"><input class="inp" type="number" step="0.1" id="pf-larguraMolduraCm" value="${PF.larguraMolduraCm||0}"><span class="u">cm</span></div><div class="field-err" id="err-larguraMolduraCm"></div></div>
+          <div><label class="lbl">Multiplicador técnico de corte</label><input class="inp" type="number" step="1" id="pf-multiplicadorCorte" value="${PF.multiplicadorCorte||8}" ${(typeof can==="function"&&!can("adm.config"))?"readonly title='Somente administrador altera'":""}></div>
+        </div>
+        <div class="hint" style="margin-top:8px">Consumo por quadro = (2×largura + 2×altura) + (largura da moldura × multiplicador). Não confundir com comprimento da barra, altura do perfil ou espessura.</div>
+      </div>
     </div></div>
 
     <div class="card"><div class="card-h"><div class="card-title">Custos por condição de pagamento</div><div class="card-desc">Selecione qual condição define o <b>custo base</b> usado nos cálculos de margem.</div></div><div class="card-b">
@@ -1383,11 +1414,14 @@ function recalc(src,silent){
 function resumoProd(){const s=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};s("rs-custo",money(PF.custoBase));s("rs-preco",money(PF.precoVenda));s("rs-margem",num(PF.margem)+"%");s("rs-lucro",money(PF.lucro));}
 function pickFornecedor(){pick({title:"Fornecedor",placeholder:"Buscar fornecedor...",items:DB.fornecedores.filter(f=>f.ativo!==false).map(f=>({id:f.nome,label:f.nome,sub:f.categoria||""})),onPick:id=>{PF.fornecedor=id;document.getElementById("pf-fornecedor").value=id;},createLabel:"Cadastrar novo fornecedor",onCreate:()=>openCadFornecedor(null,f=>{PF.fornecedor=f.nome;document.getElementById("pf-fornecedor").value=f.nome;})});}
 function pickFamilia(){pick({title:"Família",placeholder:"Buscar família...",items:DB.familias.filter(f=>f.ativo!==false).map(f=>({id:f.nome,label:f.nome,sub:"Regra: "+REGRAS[f.regra].label})),onPick:aplicaFamilia,createLabel:"Cadastrar nova família",onCreate:()=>openCadFamilia(null,f=>aplicaFamilia(f.nome))});}
-function aplicaFamilia(nome){const fam=famByNome(nome);PF.familia=nome;const fi=document.getElementById("pf-familia");if(fi)fi.value=nome;if(fam){PF.regra=fam.regra;PF.unidadeEstoque=fam.unidade;const rs=document.getElementById("pf-regra");if(rs){rs.value=fam.regra;const h=document.getElementById("regra-hint");if(h)h.textContent=REGRAS[fam.regra].hint;}const us=document.getElementById("pf-unidadeEstoque");if(us)us.value=fam.unidade;toast("Família aplicada","Regra: "+REGRAS[fam.regra].label,"info");}}
+function aplicaFamilia(nome){const fam=famByNome(nome);PF.familia=nome;const fi=document.getElementById("pf-familia");if(fi)fi.value=nome;if(fam){PF.regra=fam.regra;PF.unidadeEstoque=fam.unidade;if(fam.regra==="MOLDURA"){if(!(num0(PF.multiplicadorCorte)>0))PF.multiplicadorCorte=fam.multiplicadorPadrao||8;}const rs=document.getElementById("pf-regra");if(rs){rs.value=fam.regra;if(typeof pfRegraChange==="function")pfRegraChange(fam.regra);else{const h=document.getElementById("regra-hint");if(h)h.textContent=REGRAS[fam.regra].hint;}}const us=document.getElementById("pf-unidadeEstoque");if(us)us.value=fam.unidade;const mc=document.getElementById("pf-multiplicadorCorte");if(mc)mc.value=PF.multiplicadorCorte||8;toast("Família aplicada","Regra: "+REGRAS[fam.regra].label,"info");}}
 
+function pfRegraChange(v){PF.regra=v;const h=document.getElementById("regra-hint");if(h)h.textContent=REGRAS[v].hint;const w=document.getElementById("pf-moldura-wrap");if(w)w.style.display=(v==="MOLDURA")?"block":"none";
+  if(v==="MOLDURA"){const fam=famByNome(PF.familia);const mc=document.getElementById("pf-multiplicadorCorte");if(mc&&!(num0(mc.value)>0))mc.value=(fam&&fam.multiplicadorPadrao)||8;}}
 function salvarProduto(){
   ["descricao","codigo","refLoja","localizacao","ncm","cfop","obs"].forEach(k=>PF[k]=document.getElementById("pf-"+k).value.trim());
   PF.regra=document.getElementById("pf-regra").value;
+  if(PF.regra==="MOLDURA"){PF.larguraMolduraCm=num0(document.getElementById("pf-larguraMolduraCm").value);PF.multiplicadorCorte=num0(document.getElementById("pf-multiplicadorCorte").value)||8;}
   PF.ativo=document.getElementById("pf-ativo").checked;PF.descListaPct=num0(document.getElementById("pf-descListaPct").value);
   ["largura","comprimento","espessura","saldo","estoqueMin"].forEach(k=>PF[k]=num0(document.getElementById("pf-"+k).value));
   PF.unidadeEstoque=document.getElementById("pf-unidadeEstoque").value;
@@ -1396,6 +1430,7 @@ function salvarProduto(){
   if(!PF.descricao)errs.descricao="Informe a descrição.";
   if(!PF.familia)errs.familia="Selecione a família.";
   if(!PF.regra)errs.regra="Selecione a regra.";
+  if(PF.regra==="MOLDURA"&&!(num0(PF.larguraMolduraCm)>0))errs.larguraMolduraCm="Informe a largura da moldura no cadastro do produto.";
   if(!(PF.precoVenda>0))errs.precoVenda="Informe o preço de venda.";
   document.querySelectorAll(".field-err").forEach(e=>e.textContent="");
   document.querySelectorAll(".inp.err").forEach(e=>e.classList.remove("err"));
@@ -1578,8 +1613,9 @@ function openCadFamilia(id,onSaved){
   <div class="dlg-b"><div class="grid g2">
     <div><label class="lbl">Nome da família</label><input class="inp" id="fm-nome" value="${esc(x.nome)}" placeholder="Ex.: Vidros temperados"><div class="field-err" id="fm-err"></div></div>
     <div><label class="lbl">Código (opcional)</label><input class="inp" id="fm-codigo" value="${esc(x.codigo)}" placeholder="Ex.: VT"></div>
-    <div><label class="lbl">Regra de cálculo padrão</label><select class="inp" id="fm-regra">${Object.keys(REGRAS).map(r=>`<option value="${r}" ${x.regra===r?"selected":""}>${REGRAS[r].label}</option>`).join("")}</select></div>
+    <div><label class="lbl">Regra de cálculo padrão</label><select class="inp" id="fm-regra" onchange="var w=document.getElementById('fm-mult-wrap');if(w)w.style.display=this.value==='MOLDURA'?'block':'none'">${Object.keys(REGRAS).map(r=>`<option value="${r}" ${x.regra===r?"selected":""}>${REGRAS[r].label}</option>`).join("")}</select></div>
     <div><label class="lbl">Unidade de medida padrão</label><input class="inp" id="fm-unidade" value="${esc(x.unidade)}" placeholder="Ex.: m²"></div>
+    <div id="fm-mult-wrap" style="grid-column:1/3;display:${x.regra==="MOLDURA"?"block":"none"}"><label class="lbl">Multiplicador técnico de corte padrão (Moldura)</label><input class="inp" type="number" step="1" id="fm-mult" value="${x.multiplicadorPadrao||8}"><div class="hint" style="margin-top:6px">Usado no cálculo do acréscimo de corte: largura da moldura × multiplicador. Padrão 8.</div></div>
     <div style="grid-column:1/3"><label class="lbl">Descrição</label><input class="inp" id="fm-descricao" value="${esc(x.descricao)}"></div>
     <div style="grid-column:1/3"><label class="lbl">Observações</label><textarea class="inp" id="fm-obs" rows="2">${esc(x.obs)}</textarea></div>
     <div style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="fm-ativo" ${x.ativo!==false?"checked":""} style="width:18px;height:18px;accent-color:var(--primary)"><label style="font-size:13px">Ativa</label></div>
@@ -1590,7 +1626,7 @@ function openCadFamilia(id,onSaved){
 function salvarFamilia(id){
   const nome=document.getElementById("fm-nome").value.trim();
   if(!nome){document.getElementById("fm-err").textContent="Informe o nome.";return;}
-  const data={nome,codigo:document.getElementById("fm-codigo").value.trim(),regra:document.getElementById("fm-regra").value,unidade:document.getElementById("fm-unidade").value.trim()||"un",descricao:document.getElementById("fm-descricao").value.trim(),obs:document.getElementById("fm-obs").value.trim(),ativo:document.getElementById("fm-ativo").checked};
+  const data={nome,codigo:document.getElementById("fm-codigo").value.trim(),regra:document.getElementById("fm-regra").value,unidade:document.getElementById("fm-unidade").value.trim()||"un",multiplicadorPadrao:num0((document.getElementById("fm-mult")||{}).value)||8,descricao:document.getElementById("fm-descricao").value.trim(),obs:document.getElementById("fm-obs").value.trim(),ativo:document.getElementById("fm-ativo").checked};
   let f;
   if(id){f=DB.familias.find(x=>x.id===id);Object.assign(f,data);toast("Família atualizada",nome);}
   else{f=Object.assign(mkFam({}),data);DB.familias.unshift(f);toast("Família cadastrada",nome);}
@@ -1705,16 +1741,18 @@ function renderItem(a,ai,it,ii){
   </div>`;
 }
 const pecasItem=it=>it.medidas.reduce((s,m)=>s+(Math.max(0,Math.floor(num0(m.q)))||0),0);
-const medQtd=(it,m)=>qtdMedida(it.regra,m);
-const medTotal=(it,m)=>r2(qtdMedida(it.regra,m)*totalItem(it).preco);
+const medQtd=(it,m)=>qtdMedida(it.regra,m,DB.prodById(it.produtoId));
+const medTotal=(it,m)=>r2(qtdMedida(it.regra,m,DB.prodById(it.produtoId))*totalItem(it).preco);
 function resumoItemTxt(it){const ci=totalItem(it),reg=REGRAS[it.regra];return `${it.medidas.length} medida(s) • ${pecasItem(it)} pç • ${num(ci.q)} ${reg.suf} • ${money(ci.total)}`;}
 function medHead(regra){let cols;
-  if(regra==="M2"||regra==="PERIMETRO")cols=["Largura","Altura","Un.","Qtd.","Área","Total",""];
+  if(regra==="M2")cols=["Largura","Altura","Un.","Qtd.","Área","Total",""];
+  else if(regra==="PERIMETRO")cols=["Largura","Altura","Un.","Qtd.","Perímetro","Total",""];
+  else if(regra==="MOLDURA")cols=["Largura","Altura","Un.","Qtd.","Consumo","Total",""];
   else if(regra==="ML")cols=["Comprimento","Un.","Qtd.","Total (m)","Total","",""].filter((_,i)=>i!==5);
   else cols=["Qtd.","Total",""];
   return `<div class="medida-grid medida-head" style="grid-template-columns:${gridCols(regra)}">${cols.map(c=>`<span>${c}</span>`).join("")}</div>`;
 }
-function gridCols(regra){if(regra==="M2"||regra==="PERIMETRO")return "minmax(0,1fr) minmax(0,1fr) 58px 54px 68px 86px 34px";if(regra==="ML")return "minmax(0,1fr) 58px 54px 72px 86px 34px";return "minmax(0,1fr) 90px 34px";}
+function gridCols(regra){if(regra==="M2"||regra==="PERIMETRO"||regra==="MOLDURA")return "minmax(0,1fr) minmax(0,1fr) 58px 54px 68px 86px 34px";if(regra==="ML")return "minmax(0,1fr) 58px 54px 72px 86px 34px";return "minmax(0,1fr) 90px 34px";}
 function unitSel(ai,ii,mi,m){return `<select class="inp" onchange="setMed(${ai},${ii},${mi},'unit',this.value)">${["cm","mm","m"].map(u=>`<option ${m.unit===u?"selected":""}>${u}</option>`).join("")}</select>`;}
 function medRow(ai,ii,mi,m,regra){
   const del=`<button class="del" onclick="delMed(${ai},${ii},${mi})">${svg("trash",15)}</button>`;
@@ -1725,7 +1763,7 @@ function medRow(ai,ii,mi,m,regra){
   const AR=`<div class="medcell tnum" id="md-a-${ai}-${ii}-${mi}" style="font-size:12px;color:var(--muted);padding:0 4px;align-self:center;text-align:right"></div>`;
   const TT=`<div class="medcell tnum" id="md-t-${ai}-${ii}-${mi}" style="font-weight:600;padding:0 4px;align-self:center;text-align:right"></div>`;
   let cells;
-  if(regra==="M2"||regra==="PERIMETRO")cells=L+A+U+Q+AR+TT+del;
+  if(regra==="M2"||regra==="PERIMETRO"||regra==="MOLDURA")cells=L+A+U+Q+AR+TT+del;
   else if(regra==="ML")cells=L+U+Q+AR+TT+del;
   else cells=Q+TT+del;
   return `<div class="medida-grid" style="grid-template-columns:${gridCols(regra)}">${cells}</div>`;
@@ -2994,7 +3032,7 @@ function togObrig(pr,on){const arr=DB.config.producao.obrigatorios;const i=arr.i
 try{const s=localStorage.getItem("vg_config_centro");if(s){const p=JSON.parse(s);if(p&&typeof p==="object")DB.config.centroCusto=Object.assign(DB.config.centroCusto||{},p);}}catch(e){}
 function cfgPersistCentro(){try{localStorage.setItem("vg_config_centro",JSON.stringify(DB.config.centroCusto));}catch(e){}}
 function custoUnitProd(p){if(!p)return 0;if(p.custoBase!=null)return num0(p.custoBase);if(p.custos&&p.custos.avista!=null)return num0(p.custos.avista);return r2(num0(p.preco)*0.6);}
-function custoProdutoItem(it){const p=DB.prodById(it.produtoId);const q=it.medidas.reduce((s,m)=>s+qtdMedida(it.regra,m),0);return r2(q*custoUnitProd(p));}
+function custoProdutoItem(it){const p=DB.prodById(it.produtoId);const q=it.medidas.reduce((s,m)=>s+qtdMedida(it.regra,m,p),0);return r2(q*custoUnitProd(p));}
 function custoProdutosVenda(o){let t=0;o.ambientes.forEach(a=>a.itens.forEach(it=>t+=custoProdutoItem(it)));return r2(t);}
 function custoExtrasVenda(o){return r2((o.custosExtras||[]).reduce((s,x)=>s+num0(x.valor),0));}
 function centroCustoTotal(){const cc=DB.config.centroCusto||{};let t=num0(cc.custoFixo)+num0(cc.adsInvest);(cc.outros||[]).forEach(x=>t+=num0(x.valor));return r2(t);}
@@ -3208,7 +3246,7 @@ function gerarTermo(n){const o=DB.orcByN(n);if(!o)return;if(typeof podeVerOrc===
   docRegistrar("TERMO_ENTREGA",o);pdfAbrir(n,"termo");}
 const _cl=(num,tit,txt)=>`<div style="margin-top:14px"><b style="font-size:12px;color:#0f172a">CLÁUSULA ${num} — ${tit}</b><p style="font-size:11.5px;color:#475569;margin-top:3px;text-align:justify">${txt}</p></div>`;
 function pdfContrato(o){const P=contratoPlaceholders(o);const t=calcOrc(o);const cli=DB.cliById(o.clienteId)||{};const ent=orcRecebido(o)||condEntradaOrc(o);const saldo=r2(t.total-ent);
-  const itens=o.ambientes.map(a=>a.itens.map(it=>{const p=DB.prodById(it.produtoId);return `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 8px 6px 0">${esc(a.nome)}</td><td style="padding:6px 8px">${esc(p?p.descricao:"—")}</td><td style="padding:6px 8px" class="tnum">${pecasItem(it)} pç</td><td class="muted" style="padding:6px 8px;font-size:10.5px">${it.medidas.map(m=>memoMedida(it.regra,m)).join("; ")}</td><td class="muted" style="padding:6px 0 6px 8px">${p&&p.espessura?num(p.espessura)+" cm":"—"}</td></tr>`}).join("")).join("");
+  const itens=o.ambientes.map(a=>a.itens.map(it=>{const p=DB.prodById(it.produtoId);return `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 8px 6px 0">${esc(a.nome)}</td><td style="padding:6px 8px">${esc(p?p.descricao:"—")}</td><td style="padding:6px 8px" class="tnum">${pecasItem(it)} pç</td><td class="muted" style="padding:6px 8px;font-size:10.5px">${it.medidas.map(m=>memoMedida(it.regra,m,null,p)).join("; ")}</td><td class="muted" style="padding:6px 0 6px 8px">${p&&p.espessura?num(p.espessura)+" cm":"—"}</td></tr>`}).join("")).join("");
   return `<div class="paper">
    <div style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 12px;font-size:11px;margin-bottom:14px"><b>MINUTA CONTRATUAL — SUJEITA A REVISÃO JURÍDICA.</b> Documento gerado automaticamente a partir da venda; deve ser revisado por advogado antes do uso comercial. Não constitui aconselhamento jurídico.</div>
    ${pdfHead(o,"CONTRATO DE PRESTAÇÃO DE SERVIÇOS")}
@@ -3247,7 +3285,7 @@ function pdfContrato(o){const P=contratoPlaceholders(o);const t=calcOrc(o);const
    <div style="margin-top:16px;text-align:center;font-size:10px;color:#94a3b8">${esc(DB.config.empresa.rodape||"")} — minuta para revisão jurídica.</div>
   </div>`;}
 function pdfTermo(o){const cli=DB.cliById(o.clienteId)||{};const ob=obraByN(o.n)||{};const e=DB.config.empresa;
-  const itens=o.ambientes.map(a=>a.itens.map(it=>{const p=DB.prodById(it.produtoId);return `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 8px 6px 0">${esc(a.nome)}</td><td style="padding:6px 8px">${esc(p?p.descricao:"—")}</td><td class="tnum" style="padding:6px 8px">${pecasItem(it)} pç</td><td class="muted" style="padding:6px 0 6px 8px;font-size:10.5px">${it.medidas.map(m=>memoMedida(it.regra,m)).join("; ")}</td></tr>`}).join("")).join("");
+  const itens=o.ambientes.map(a=>a.itens.map(it=>{const p=DB.prodById(it.produtoId);return `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 8px 6px 0">${esc(a.nome)}</td><td style="padding:6px 8px">${esc(p?p.descricao:"—")}</td><td class="tnum" style="padding:6px 8px">${pecasItem(it)} pç</td><td class="muted" style="padding:6px 0 6px 8px;font-size:10.5px">${it.medidas.map(m=>memoMedida(it.regra,m,null,p)).join("; ")}</td></tr>`}).join("")).join("");
   return `<div class="paper">${pdfHead(o,"TERMO DE ENTREGA, CONFERÊNCIA E RESPONSABILIDADE")}
    <div style="text-align:center;margin:6px 0;font-size:11px;color:#64748b">Venda nº ${o.n} • Obra: ${esc(o.obraNome||"—")} • Emissão ${hojeBR()}</div>
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:12px 0;border-bottom:1px solid #e2e8f0;font-size:11.5px">
@@ -3890,7 +3928,7 @@ VIEWS["analise-venda-detalhe"]=()=>{const o=DB.orcByN(curAnalise);if(!o)return p
   const ob=(typeof obraByN==="function")?obraByN(o.n):null;const rec=orcRecebido(o),sal=orcSaldoF(o);
   const proxV=(typeof proxVencVenda==="function")?proxVencVenda(o):"";
   const lucroBruto=r2(m.receita-m.cp);const lucroLiq=m.lucro;const mB=m.receita>0?r2(lucroBruto/m.receita*100):0;
-  const itensRows=o.ambientes.map(a=>a.itens.map(it=>{const p=DB.prodById(it.produtoId);const q=it.medidas.reduce((s,x)=>s+qtdMedida(it.regra,x),0);const cu=custoUnitProd(p);const ct=r2(q*cu);const ci=totalItem(it);const lucro=r2(ci.total-ct);const mg=ci.total>0?r2(lucro/ci.total*100):0;
+  const itensRows=o.ambientes.map(a=>a.itens.map(it=>{const p=DB.prodById(it.produtoId);const q=it.medidas.reduce((s,x)=>s+qtdMedida(it.regra,x,p),0);const cu=custoUnitProd(p);const ct=r2(q*cu);const ci=totalItem(it);const lucro=r2(ci.total-ct);const mg=ci.total>0?r2(lucro/ci.total*100):0;
     return `<tr><td>${esc(p?p.descricao:"—")}<div class="subtle" style="font-size:11px">${esc(a.nome)}</div></td><td style="text-align:right" class="tnum">${num(q,2)}</td><td style="text-align:right" class="tnum">${money(cu)}</td><td style="text-align:right" class="tnum">${money(ct)}</td><td style="text-align:right" class="tnum">${money(ci.total)}</td><td style="text-align:right;color:${lucro>=0?'var(--success)':'var(--danger)'}" class="tnum">${money(lucro)}</td><td style="text-align:right" class="tnum">${num(mg,1)}%</td></tr>`;}).join("")).join("");
   const cds=(o.custosExtras||[]);
   const hist=[]; (o.recebimentos||[]).forEach(r=>hist.push({d:r.data,txt:(r.estornado?"Recebimento estornado":"Recebimento")+" "+money(r.valor)+" ("+(FORMAS[r.forma]||r.forma||"")+")",por:r.usuario||""}));

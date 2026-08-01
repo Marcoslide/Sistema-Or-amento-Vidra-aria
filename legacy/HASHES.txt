@@ -1,13 +1,12 @@
 arquivo: vidrogestor-congelado.html
-tamanho_bytes: 574495
-linhas: 4024
-md5:    ff0ddf50f9accd41d1febec985d1749e
-sha256: 8ff18e1bdde56fbd558343056b46049ce3155f9585a53fd2664ce8c815555057
-data_congelamento: 2026-08-01 (v2 — pós-auditoria funcional)
+tamanho_bytes: 579613
+linhas: 4062
+md5:    ee55cdda36732bfb7bd18194456b518d
+sha256: 5360b41083f5498b0926ad753780c651095d14b2c9fc491bb5bfee02aef31985
+data_congelamento: 2026-08-01 (v3 — regra MOLDURA)
 
 Histórico de congelamento:
 - v1 (auditoria estática, 363 testes): md5 6e817e4a919c58393d75bfe4ad7259a9 / 572622 bytes
-    -> 6 falhas funcionais de "lojas ativas/inativas" descobertas na auditoria funcional real.
-- v2 (esta): correções aplicadas (lojasAtivas/lojasSelecionaveis filtrando ativo,
-    validarLojaNovoLancamento em orçamento e conta a pagar, realocação de CURR_LOJA).
-    386/386 testes (363 regressão + 23 auditoria funcional), 0 regressão, 0 erro JS.
+- v2 (auditoria funcional; correção lojas ativas/inativas): md5 ff0ddf50f9accd41d1febec985d1749e / 574495 bytes
+- v3 (esta — regra de cálculo MOLDURA da família Molduras):
+    411/411 testes (363 regressão + 23 auditoria funcional + 25 MOLDURA), 0 regressão, 0 erro JS.
