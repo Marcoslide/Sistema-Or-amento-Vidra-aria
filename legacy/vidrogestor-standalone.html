@@ -614,6 +614,8 @@ function seedOrc(o){o.acrescimo=o.acrescimo||0;o.frete=o.frete||0;o.instalacao=o
  {n:1029,clienteId:"c2",clienteNome:"Construtora Horizonte Ltda.",obraNome:"Edifício Aurora — fachada",vendNome:"Diego Farias",status:"RECLAMACAO",criado:"10/06/2026",desc:0,obs:"Cliente relatou infiltração. Vistoria agendada.",
   ambientes:[{id:uid("a"),nome:"Fachada frontal",collapsed:false,itens:[{id:uid("i"),produtoId:"p8",regra:"M2",descPct:0,medidas:[{id:uid("m"),l:1.50,a:1.20,q:12,unit:"m"}]}]}],pagamentos:[{id:uid("p"),forma:"TRANSFERENCIA",valor:14040,parcelas:1,obs:""}]},
 ].forEach(o=>DB.orcamentos.push(seedOrc(o)));
+/* dado de demonstração: vincula cada venda demo à sua loja antes dos recebimentos seed */
+;(function(){const M={"Carla Mendes":"L1","Diego Farias":"L2","Patrícia Lopes":"L3","Rodrigo Alves":"L1"};DB.orcamentos.forEach(o=>{if(!o.lojaId)o.lojaId=M[o.vendNome]||"L1";});})();
 let ORC_SEQ=1030;
 
 /* totais de um orçamento */
@@ -644,7 +646,11 @@ DB.caixa={saldoInicial:5000,movimentos:[]};
 function caixaEntradas(){return DB.caixa.movimentos.filter(m=>m.tipo==="entrada").reduce((s,m)=>s+m.valor,0);}
 function caixaSaidas(){return DB.caixa.movimentos.filter(m=>m.tipo==="saida").reduce((s,m)=>s+m.valor,0);}
 function caixaSaldo(){return r2(DB.caixa.saldoInicial+caixaEntradas()-caixaSaidas());}
-function addCaixa(tipo,valor,desc,pedido,forma,data){const id=uid("mv");let lojaId="L1";try{const po=pedido?DB.orcByN(pedido):null;lojaId=(po&&po.lojaId)||(typeof CURR_LOJA!=="undefined"&&CURR_LOJA)||(typeof CURR_USER!=="undefined"&&CURR_USER&&CURR_USER.lojas[0])||"L1";}catch(e){}DB.caixa.movimentos.push({id,data:data||hojeBR(),tipo,valor:r2(valor),desc,pedido,forma,lojaId,por:(typeof CURR_USER!=="undefined"&&CURR_USER?CURR_USER.nome:"—")});return id;}
+function addCaixa(tipo,valor,desc,pedido,forma,data,lojaId){const id=uid("mv");
+  let lj=lojaId||"";
+  if(!lj){try{const po=pedido?DB.orcByN(pedido):null;lj=(po&&po.lojaId)||((typeof CURR_LOJA!=="undefined"&&CURR_LOJA)||"");}catch(e){lj="";}}
+  if(!lj){const msg="Não foi possível determinar a operação responsável por este movimento financeiro.";if(typeof toast==="function")toast("Operação não determinada",msg,"warn2");throw new Error(msg);}
+  DB.caixa.movimentos.push({id,data:data||hojeBR(),tipo,valor:r2(valor),desc,pedido,forma,lojaId:lj,por:(typeof CURR_USER!=="undefined"&&CURR_USER?CURR_USER.nome:"—")});return id;}
 
 /* ===== financeiro ===== */
 const STATUS_FIN={NAO:["Não recebido","b-muted"],PARCIAL:["Parcialmente recebido","b-warning"],RECEBIDO:["Recebido","b-success"],VENCIDO:["Vencido","b-danger"],CANCELADO:["Cancelado","b-secondary"],ESTORNADO:["Estornado","b-secondary"]};
@@ -1641,7 +1647,7 @@ VIEWS["orcamento-novo"]=()=>`<div id="builder-root"></div>`;
 function editarOrc(n){EDIT_ORC_N=n;go("orcamento-novo");}
 function defaultCondicao(){return {tipo:"ENTRADA_SALDO",formas:["PIX"],entradaModo:"pct",entradaPct:50,entradaValor:0,parcelas:2,primeiroVenc:"",intervalo:30,etapas:[{id:uid("e"),desc:"Na aprovação",pct:30},{id:uid("e"),desc:"No início da instalação",pct:40},{id:uid("e"),desc:"Na conclusão",pct:30}],obs:""};}
 function mountBuilder(){
-  const _lojaDefault=(typeof CURR_LOJA!=="undefined"&&CURR_LOJA)||((typeof scopeLojas==="function"?scopeLojas():[])[0])||((DB.lojas[0]||{}).id)||"L1";
+  const _lojaDefault=(typeof CURR_LOJA!=="undefined"&&CURR_LOJA)||((typeof lojasSelecionaveis==="function"?(lojasSelecionaveis()[0]||{}).id:"")||"");
   if(EDIT_ORC_N){const o=DB.orcByN(EDIT_ORC_N);B=JSON.parse(JSON.stringify(o));EDIT_ORC_N=null;if(!B.condicao)B.condicao=defaultCondicao();if(!B.entrega)B.entrega={qtd:"",unidade:"corridos",base:"aprovacao",obs:""};if(B.obsInterna==null)B.obsInterna="";if(!B.lojaId)B.lojaId=_lojaDefault;}
   else{const meuVend=(typeof CURR_USER!=="undefined"&&CURR_USER&&CURR_USER.perfil==="vendedor"&&CURR_USER.vendedorId)?((DB.vendedores.find(v=>v.id===CURR_USER.vendedorId)||{}).nome||""):"";
     B={n:null,status:"RASCUNHO",clienteId:"",clienteNome:"",obraId:"",obraNome:"",vendNome:meuVend,lojaId:_lojaDefault,validade:15,previsao:"",desc:0,acrescimo:0,frete:0,instalacao:0,obs:"",obsInterna:"",entrega:{qtd:"",unidade:"corridos",base:"aprovacao",obs:""},ambientes:[{id:uid("a"),nome:"Ambiente 1",collapsed:false,obs:"",itens:[]}],condicao:defaultCondicao(),recebimentos:[],parcelas:[],vendaGerada:false};}
@@ -2727,11 +2733,11 @@ function cpSalvar(baixar){const dados=cpColeta();if(!dados)return;
   const serie=dados.ocorrencia!=="Única";
   if(!curCP&&serie){const qtd=Math.max(1,Math.min(60,num0(dados.recQtd)||12));const recorrenciaId=uid("rec");const criadas=[];
     for(let i=0;i<qtd;i++){let venc=cpVencimentoSerie(dados.vencimento,dados.ocorrencia,i,dados.recInt);if(dados.recDiaUtil)venc=_diaUtil(venc);
-      const c=Object.assign({id:uid("cp"),lojaId:"L1",pagamentos:[],cancelada:false,anexos:[],recorrenciaId,recIndex:i+1,recTotal:qtd},dados,{vencimento:venc});DB.contasPagar.push(c);criadas.push(c);}
+      const c=Object.assign({id:uid("cp"),pagamentos:[],cancelada:false,anexos:[],recorrenciaId,recIndex:i+1,recTotal:qtd},dados,{vencimento:venc});DB.contasPagar.push(c);criadas.push(c);}
     if(typeof audit==="function")audit("Criou série de contas ("+qtd+")","Contas a pagar",dados.fornecedor);
     closeModal();toast("Série criada",qtd+" título(s) — "+dados.ocorrencia+".");go("contas-pagar");return;}
   let c=curCP;
-  if(c){Object.assign(c,dados);}else{c=Object.assign({id:uid("cp"),lojaId:"L1",pagamentos:[],cancelada:false,anexos:[]},dados);DB.contasPagar.push(c);}
+  if(c){Object.assign(c,dados);}else{c=Object.assign({id:uid("cp"),pagamentos:[],cancelada:false,anexos:[]},dados);DB.contasPagar.push(c);}
   if(baixar){closeModal();cpBaixaUI(c.id);return;}
   closeModal();toast("Conta salva",cpSituacao(c)==="ATRASADA"?"Título em aberto (atrasado).":"Título em aberto. Caixa não movimentado.");go("contas-pagar");
 }
@@ -2759,7 +2765,7 @@ function cpBaixaUI(id){const c=DB.contasPagar.find(x=>x.id===id);if(!c)return;co
 function cpBaixar(id){const c=DB.contasPagar.find(x=>x.id===id);if(!c)return;const valor=num0(document.getElementById("cb-valor").value);
   if(!(valor>0)){document.getElementById("cb-err").textContent="Informe o valor pago.";return;}
   const data=isoToBR(document.getElementById("cb-data").value)||hojeBR();const forma=document.getElementById("cb-forma").value;const contaFin=document.getElementById("cb-conta").value;const desc=num0(document.getElementById("cb-desc").value);const obs=document.getElementById("cb-obs").value.trim();
-  const movId=addCaixa("saida",valor,"Pagamento a "+c.fornecedor+(c.nDoc?" ("+c.nDoc+")":""),null,forma,data);
+  const movId=addCaixa("saida",valor,"Pagamento a "+c.fornecedor+(c.nDoc?" ("+c.nDoc+")":""),null,forma,data,c.lojaId);
   c.pagamentos.push({id:uid("pg"),data,valor,forma,contaFin,desconto:desc,obs,usuario:"Financeiro",estornado:false,movId});
   c.forma=forma;c.contaFin=contaFin;
   closeModal();toast("Baixa registrada","Caixa: − "+money(valor)+" • "+CP_SIT[cpSituacao(c)][0]);go("contas-pagar");
@@ -2767,10 +2773,10 @@ function cpBaixar(id){const c=DB.contasPagar.find(x=>x.id===id);if(!c)return;con
 function cpBaixarSel(){const ids=selIds("cp");if(!ids.length){toast("Selecione títulos","Marque as contas para baixar.","warn2");return;}
   const abertas=ids.map(id=>DB.contasPagar.find(c=>c.id===id)).filter(c=>c&&!c.cancelada&&cpSituacao(c)!=="PAGA");
   if(!abertas.length){toast("Nada a baixar","Selecionados já pagos/cancelados.","info");return;}
-  confirmDlg({title:"Baixar selecionados",okLabel:"Baixar "+abertas.length,msg:"Registrar o pagamento de <b>"+abertas.length+"</b> título(s) pelo valor total, hoje? Cada um gera uma única saída no caixa.",onOk:()=>{abertas.forEach(c=>{const v=r2(cpTotal(c)-cpPago(c));const movId=addCaixa("saida",v,"Pagamento a "+c.fornecedor,null,c.forma||"PIX",hojeBR());c.pagamentos.push({id:uid("pg"),data:hojeBR(),valor:v,forma:c.forma||"PIX",contaFin:c.contaFin,desconto:0,obs:"Baixa em lote",usuario:"Financeiro",estornado:false,movId});});selClear("cp");toast("Baixa em lote",abertas.length+" título(s) pagos.");go("contas-pagar");}});
+  confirmDlg({title:"Baixar selecionados",okLabel:"Baixar "+abertas.length,msg:"Registrar o pagamento de <b>"+abertas.length+"</b> título(s) pelo valor total, hoje? Cada um gera uma única saída no caixa.",onOk:()=>{abertas.forEach(c=>{const v=r2(cpTotal(c)-cpPago(c));const movId=addCaixa("saida",v,"Pagamento a "+c.fornecedor,null,c.forma||"PIX",hojeBR(),c.lojaId);c.pagamentos.push({id:uid("pg"),data:hojeBR(),valor:v,forma:c.forma||"PIX",contaFin:c.contaFin,desconto:0,obs:"Baixa em lote",usuario:"Financeiro",estornado:false,movId});});selClear("cp");toast("Baixa em lote",abertas.length+" título(s) pagos.");go("contas-pagar");}});
 }
 function cpEstornar(id){const c=DB.contasPagar.find(x=>x.id===id);if(!c||!cpPago(c))return;
-  confirmDlg({title:"Estornar pagamento",danger:true,okLabel:"Estornar",msg:"Estornar os pagamentos de <b>"+esc(c.fornecedor)+"</b>? Uma entrada de reversão será lançada no caixa.",onOk:()=>{(c.pagamentos||[]).filter(p=>!p.estornado).forEach(p=>{p.estornado=true;addCaixa("entrada",p.valor,"Estorno de pagamento a "+c.fornecedor,null,p.forma,hojeBR());});toast("Pagamento estornado","","warn2");go("contas-pagar");}});
+  confirmDlg({title:"Estornar pagamento",danger:true,okLabel:"Estornar",msg:"Estornar os pagamentos de <b>"+esc(c.fornecedor)+"</b>? Uma entrada de reversão será lançada no caixa.",onOk:()=>{(c.pagamentos||[]).filter(p=>!p.estornado).forEach(p=>{p.estornado=true;addCaixa("entrada",p.valor,"Estorno de pagamento a "+c.fornecedor,null,p.forma,hojeBR(),c.lojaId);});toast("Pagamento estornado","","warn2");go("contas-pagar");}});
 }
 function cpExcluirSel(){const ids=selIds("cp");if(!ids.length){toast("Selecione títulos","Marque as contas para excluir.","warn2");return;}
   confirmDlg({title:"Excluir contas a pagar",danger:true,okLabel:"Excluir "+ids.length+" título(s)",msg:"Excluir os <b>"+ids.length+"</b> título(s) selecionado(s)? Títulos com pagamento registrado serão ignorados (estorne antes de excluir).",onOk:()=>{let del=0,skip=0;ids.forEach(id=>{const c=DB.contasPagar.find(x=>x.id===id);if(!c)return;if(cpPago(c)>0.001){skip++;return;}DB.contasPagar=DB.contasPagar.filter(x=>x.id!==id);del++;});if(typeof audit==="function")audit("Excluiu contas a pagar ("+del+")","Contas a pagar","");selClear("cp");toast(del+" excluído(s)"+(skip?" • "+skip+" ignorado(s) (com pagamento)":""),"","warn2");go("contas-pagar");}});}
@@ -3174,7 +3180,7 @@ let CURR_LOJA=""; // "" = todas as operações autorizadas
 const VEND_LOJA={v1:"L1",v2:"L2",v3:"L3",v4:"L1"};
 /* seeds: lojaId + vendedorId em cada registro operacional/financeiro */
 (function(){
-  DB.orcamentos.forEach(o=>{const v=DB.vendedores.find(x=>x.nome===o.vendNome);o.vendedorId=v?v.id:"v1";o.lojaId=VEND_LOJA[o.vendedorId]||"L1";o.createdBy=o.createdBy||(v?v.nome:"Carla Mendes");o.criadoEm=o.criadoEm||o.criado;});
+  DB.orcamentos.forEach(o=>{const v=DB.vendedores.find(x=>x.nome===o.vendNome);o.vendedorId=v?v.id:"v1";o.lojaId=o.lojaId||VEND_LOJA[o.vendedorId];o.createdBy=o.createdBy||(v?v.nome:"Carla Mendes");o.criadoEm=o.criadoEm||o.criado;});
   // variar loja das contas a pagar para demonstrar isolamento financeiro
   const lojasCP=["L1","L1","L2","L3","L2","L1","L3","L1"];(DB.contasPagar||[]).forEach((c,i)=>{c.lojaId=lojasCP[i%lojasCP.length];c.createdBy=c.createdBy||"Financeiro";});
   // obras herdam a loja do pedido
@@ -3421,7 +3427,7 @@ function cancelarReclamacao(id){const f=reclById(id);if(!f)return;confirmDlg({ti
 function reclAddCusto(id){const f=reclById(id);if(!f)return;const o=f.o;const valor=num0((window.prompt&&window.prompt("Valor do custo desta reclamação (R$):",String(f.r.custoGerado||0)))||0);if(!(valor>0))return;
   o.custosExtras=o.custosExtras||[];o.custosExtras.push({id:uid("ce"),desc:"Custo de reclamação / assistência #"+f.r.num,valor,data:hojeBR(),por:(CURR_USER?CURR_USER.nome:"—")});
   const criarCP=window.confirm&&window.confirm("Criar também uma conta a pagar vinculada?");
-  if(criarCP){DB.contasPagar=DB.contasPagar||[];DB.contasPagar.push({id:uid("cp"),fornecedor:"Assistência — reclamação #"+f.r.num,valor,emissao:hojeBR(),competencia:hojeBR(),vencimento:hojeBR(),historico:"Reclamação #"+f.r.num+" — "+o.clienteNome,forma:"PIX",contaFin:(DB.contas[0]||{}).nome||"",categoria:"Sem categoria",lojaId:o.lojaId||CURR_LOJA||"L1",createdBy:(CURR_USER?CURR_USER.nome:"—"),criadoEm:hojeBR(),pagamentos:[],anexos:[],ocorrencia:"Única"});}
+  if(criarCP){DB.contasPagar=DB.contasPagar||[];DB.contasPagar.push({id:uid("cp"),fornecedor:"Assistência — reclamação #"+f.r.num,valor,emissao:hojeBR(),competencia:hojeBR(),vencimento:hojeBR(),historico:"Reclamação #"+f.r.num+" — "+o.clienteNome,forma:"PIX",contaFin:(DB.contas[0]||{}).nome||"",categoria:"Sem categoria",lojaId:o.lojaId||CURR_LOJA||"",createdBy:(CURR_USER?CURR_USER.nome:"—"),criadoEm:hojeBR(),pagamentos:[],anexos:[],ocorrencia:"Única"});}
   if(typeof audit==="function")audit("Custo de reclamação","Financeiro","#"+o.n+" "+money(valor));toast("Custo adicionado à venda",money(valor)+(criarCP?" + conta a pagar":""));go("reclamacao");}
 (function(){window.encerrarReclamacao=function(n){const o=DB.orcByN(n);if(!o)return;(o.reclamacoes||[]).forEach(r=>{if(reclAberta(r))r.status="RESOLVIDA";});syncStatusReclamacao(o);toast("Reclamações encerradas","Venda #"+n);go(typeof cur!=="undefined"&&cur==="acompanhamento"?"acompanhamento":"vendas");};})();
 function reclAtrasada(r){if(!reclAberta(r))return false;const p=r.prazoResol;return p&&diasAtraso(p)>0;}

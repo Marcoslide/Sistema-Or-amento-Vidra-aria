@@ -61,7 +61,7 @@ const ev = (page, fn, arg) => page.evaluate(fn, arg);
 
   // 16. estorno reverte
   const caixaAnt = await ev(page, () => caixaSaldo());
-  await ev(page, id => { const c=DB.contasPagar.find(x=>x.id===id); c.pagamentos.filter(p=>!p.estornado).forEach(p=>{p.estornado=true;addCaixa("entrada",p.valor,"Estorno",null,p.forma,hojeBR());}); }, idParc);
+  await ev(page, id => { const c=DB.contasPagar.find(x=>x.id===id); c.pagamentos.filter(p=>!p.estornado).forEach(p=>{p.estornado=true;addCaixa("entrada",p.valor,"Estorno",null,p.forma,hojeBR(),c.lojaId);}); }, idParc);
   const s16 = await ev(page, id => ({ sit:cpSituacao(DB.contasPagar.find(x=>x.id===id)), caixa:caixaSaldo() }), idParc);
   chk("16. Estorno reverte movimento (caixa volta, título EM_ABERTO/ATRASADA)", Math.abs((s16.caixa-caixaAnt)-400)<0.01 && s16.sit!=="PAGA" && s16.sit!=="PARCIAL", JSON.stringify(s16));
 

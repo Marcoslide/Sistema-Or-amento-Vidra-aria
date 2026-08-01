@@ -259,6 +259,44 @@ const ev = (p, fn, a) => p.evaluate(fn, a);
   rec("D2", "openLojaForm (vendedor)", "Vendedor tenta abrir cadastro de loja por chamada direta",
     "guard bloqueia (form não abre)", d2.bloq ? "bloqueado" : "ABRIU", d2.bloq);
 
+  // ============ GRUPO E — ELIMINAÇÃO DO FALLBACK L1 ============
+  await ev(page, () => { CURR_USER = DB.usuarios.find(u => u.perfil === "admin"); CURR_LOJA = ""; });
+  // E1 — movimento sem loja determinável é BLOQUEADO (não cai em L1)
+  const e1 = await ev(page, () => {
+    const n0 = DB.caixa.movimentos.length; let bloq = false, msg = "";
+    try { addCaixa("entrada", 100, "Teste sem loja", null, "PIX", hojeBR()); } catch (e) { bloq = true; msg = e.message; }
+    const criou = DB.caixa.movimentos.length > n0;
+    return { bloq, msg, criou };
+  });
+  rec("E1", "addCaixa (sem origem)", "Movimento financeiro sem loja determinável (CURR_LOJA vazio, sem pedido)",
+    "BLOQUEIA e não cria movimento em L1", (e1.bloq ? "bloqueado: " + e1.msg : "PERMITIU") + " criou=" + e1.criou,
+    e1.bloq && !e1.criou && /não foi possível determinar a operação/i.test(e1.msg));
+  // E2 — recebimento carrega a loja DA VENDA (origem), não L1
+  const e2 = await ev(page, () => {
+    const o = DB.orcamentos.find(x => x.vendaGerada && x.lojaId && x.lojaId !== "L1");
+    if (!o) return { ok: true, nota: "sem venda fora de L1 para checar" };
+    const id = addCaixa("entrada", 50, "Receb teste origem", o.n, "PIX", hojeBR());
+    const mv = DB.caixa.movimentos.find(m => m.id === id);
+    const ok = mv && mv.lojaId === o.lojaId;
+    DB.caixa.movimentos = DB.caixa.movimentos.filter(m => m.id !== id);
+    return { ok, esperado: o.lojaId, obtido: mv && mv.lojaId };
+  });
+  rec("E2", "addCaixa (pedido→venda)", "Recebimento descobre a loja pela venda de origem",
+    "movimento na loja da venda", JSON.stringify(e2), e2.ok);
+  // E3 — pagamento de conta a pagar carrega a loja DA CONTA (L2), não L1
+  const e3 = await ev(page, () => {
+    const c = { id: "cpE3", fornecedor: "Forn E3", valor: 200, vencimento: hojeBR(), lojaId: "L2", forma: "PIX", contaFin: "", pagamentos: [] };
+    DB.contasPagar.push(c);
+    const id = addCaixa("saida", 200, "Pagamento E3", null, "PIX", hojeBR(), c.lojaId);
+    const mv = DB.caixa.movimentos.find(m => m.id === id);
+    const ok = mv && mv.lojaId === "L2";
+    DB.caixa.movimentos = DB.caixa.movimentos.filter(m => m.id !== id);
+    DB.contasPagar = DB.contasPagar.filter(x => x.id !== "cpE3");
+    return { ok, obtido: mv && mv.lojaId };
+  });
+  rec("E3", "addCaixa (conta a pagar)", "Pagamento de conta a pagar usa a loja da conta",
+    "movimento na loja L2 da conta", JSON.stringify(e3), e3.ok);
+
   // ============ SAÍDA ============
   console.log("=== ERROS JS ===");
   console.log(errors.length ? errors.slice(0, 12).join("\n") : "NENHUM");

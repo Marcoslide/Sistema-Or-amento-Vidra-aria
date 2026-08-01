@@ -1,12 +1,22 @@
-arquivo: vidrogestor-congelado.html
-tamanho_bytes: 579613
-linhas: 4062
-md5:    ee55cdda36732bfb7bd18194456b518d
-sha256: 5360b41083f5498b0926ad753780c651095d14b2c9fc491bb5bfee02aef31985
-data_congelamento: 2026-08-01 (v3 — regra MOLDURA)
+=== VERSÃO OFICIAL DA FASE 1 ===
+arquivo: vidrogestor-congelado-v3.html  (cópia idêntica em vidrogestor-congelado.html)
+tamanho_bytes: 580072
+linhas: 4068
+md5:    5a92ab172b47cf7e48727ccaf140d82c
+sha256: cc6611b02d229ab9e4d7b1131db24fc627a85649fce1b79d180fc007b2ff02e3
+data_congelamento: 2026-08-01
 
-Histórico de congelamento:
-- v1 (auditoria estática, 363 testes): md5 6e817e4a919c58393d75bfe4ad7259a9 / 572622 bytes
-- v2 (auditoria funcional; correção lojas ativas/inativas): md5 ff0ddf50f9accd41d1febec985d1749e / 574495 bytes
-- v3 (esta — regra de cálculo MOLDURA da família Molduras):
-    411/411 testes (363 regressão + 23 auditoria funcional + 25 MOLDURA), 0 regressão, 0 erro JS.
+--- v2 (referência de comparação) ---
+arquivo: vidrogestor-congelado-v2.html
+tamanho_bytes: 574495
+linhas: 4024
+md5:    ff0ddf50f9accd41d1febec985d1749e
+sha256: 8ff18e1bdde56fbd558343056b46049ce3155f9585a53fd2664ce8c815555057
+
+Histórico:
+- v1: md5 6e817e4a919c58393d75bfe4ad7259a9 / 572622 bytes — auditoria estática (363).
+- v2: md5 ff0ddf50f9accd41d1febec985d1749e / 574495 bytes — auditoria funcional real;
+      correção de lojas ativas/inativas (transversal).
+- v3: md5 5a92ab172b47cf7e48727ccaf140d82c / 580072 bytes — regra da família MOLDURA + eliminação
+      definitiva do fallback de loja "L1" em movimentos financeiros.
+      Bateria: 414/414 (363 regressão + 26 auditoria funcional + 25 MOLDURA), 0 erro JS.
