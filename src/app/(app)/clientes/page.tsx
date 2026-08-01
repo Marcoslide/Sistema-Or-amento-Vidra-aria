@@ -22,12 +22,13 @@ import type { Cliente } from "@/lib/types";
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState("");
   const [query, setQuery] = useState("");
 
   useEffect(() => {
     listarClientes()
-      .then((data) => setClientes(data))
-      .catch(() => setClientes([]))
+      .then((data) => { setClientes(data); setErro(""); })
+      .catch((e) => { setClientes([]); setErro(e?.message || "Falha de conexão com o banco de dados."); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -55,6 +56,12 @@ export default function ClientesPage() {
           </Link>
         </Button>
       </PageHeader>
+
+      {erro && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {erro} — verifique a conexão. Os dados não são exibidos para não mostrar informação desatualizada.
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">
