@@ -6,9 +6,28 @@
 
 ## 0. Commit e branch
 
-- Commit aprovado para homologação: **`eb3ea37`**.
-- Branch de desenvolvimento: `claude/orcamentos-vidracarias-esquadrias-jl63nl` (já em `eb3ea37`).
-- Homologação: atualizar a branch **`staging`** para `eb3ea37`. **Não** fazer merge na `main`.
+- Commit aprovado para homologação: **`eb3ea37`** (código) + **`80fee43`** (preparação de staging).
+- Branch de desenvolvimento: `claude/orcamentos-vidracarias-esquadrias-jl63nl`.
+- Homologação roda na branch **`staging`**. **Não** fazer merge na `main`.
+
+### Equivalência da branch `staging` (Opção C — aprovada)
+
+A `staging` foi atualizada pela **interface do GitHub** com *rebase and merge*, o que gerou
+novos SHAs de commit com **conteúdo idêntico**. Decisão: **manter `staging` em `dbda91e`**
+(sem force push), oficialmente aprovada por ter árvore idêntica ao `80fee43`.
+
+```text
+Commit original preparado para homologação: 80fee43
+Commit efetivo da branch staging:           dbda91e
+Tree SHA de ambos:                          4bd3dd962dadacccb87c215e25ac0e075b0fa186
+Motivo da diferença:                        rebase and merge pela interface do GitHub
+Conteúdo:                                   idêntico (git diff 80fee43 dbda91e = vazio)
+```
+
+Verificação (reproduzível): `git rev-parse 80fee43^{tree}` == `git rev-parse dbda91e^{tree}`
+e `git diff --quiet 80fee43 dbda91e`. A branch `develop` (em `2f08cf2`, App-1) está
+desatualizada, mas **não** afeta a homologação — será organizada depois. **Não** alterar
+`main` nem `develop` neste momento.
 
 ## 1. Ordem completa das migrations (banco vazio → pronto)
 
