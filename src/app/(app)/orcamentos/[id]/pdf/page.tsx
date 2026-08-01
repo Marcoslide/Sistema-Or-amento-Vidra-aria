@@ -1,247 +1,160 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Printer, Download, GalleryVerticalEnd } from "lucide-react";
+import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/toast";
-import { orcamentoService } from "@/data/services";
-import { totalPagamentos } from "@/lib/calculations";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
-import {
-  FORMA_PAGAMENTO_LABEL,
-  UNIDADE_CALCULO_LABEL,
-  type Orcamento,
-} from "@/lib/types";
+import { createClient } from "@/lib/supabase/client";
+import { getVenda, type VendaFull } from "@/lib/data/vendas-core";
+import { formatCurrency, formatDate } from "@/lib/format";
+import { calcOrc, totalItem, qtdMedida, type Regra } from "@/lib/commercial/calc";
+import { labelSituacao } from "@/lib/commercial/situacao";
 
-const EMPRESA = {
-  nome: "VidroGestor Vidraçaria & Esquadrias",
-  cnpj: "12.345.678/0001-90",
-  telefone: "(11) 3000-1000",
-  email: "contato@vidrogestor.com.br",
-  endereco: "Rua das Indústrias, 450 — São Paulo/SP",
-};
+type Empresa = { nome: string; cnpj: string; loja: string; cidade: string; uf: string; resp: string };
+type ProdInfo = { descricao: string; larguraMolduraCm: number; multiplicadorCorte: number; preco: number };
 
-export default function OrcamentoPdfPage() {
+export default function VendaPdfPage() {
   const params = useParams<{ id: string }>();
-  const { toast } = useToast();
-  const [orc, setOrc] = useState<Orcamento | null>(null);
+  const [venda, setVenda] = useState<VendaFull | null>(null);
+  const [prods, setProds] = useState<Record<string, ProdInfo>>({});
+  const [emp, setEmp] = useState<Empresa | null>(null);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState("");
 
-  useEffect(() => {
-    orcamentoService.obter(params.id).then((data) => {
-      setOrc(data);
-      setLoading(false);
-    });
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const v = await getVenda(params.id);
+      if (!v) { setErro("Registro não encontrado."); return; }
+      setVenda(v);
+      const s = createClient();
+      // identidade documental: SEMPRE a loja da venda (nunca misturar lojas)
+      const [{ data: org }, { data: store }] = await Promise.all([
+        s.from("organizations").select("nome,cnpj").limit(1).maybeSingle(),
+        s.from("stores").select("nome,cnpj,cidade,uf,resp").eq("id", v.store_id).maybeSingle(),
+      ]);
+      setEmp({
+        nome: (org?.nome as string) || "Empresa", cnpj: (store?.cnpj as string) || (org?.cnpj as string) || "",
+        loja: (store?.nome as string) || "", cidade: (store?.cidade as string) || "", uf: (store?.uf as string) || "",
+        resp: (store?.resp as string) || "",
+      });
+      const ids = Array.from(new Set(v.ambientes.flatMap((a) => a.itens.map((i) => i.product_id).filter(Boolean)))) as string[];
+      if (ids.length) {
+        const { data } = await s.from("products").select("id,descricao,largura_moldura_cm,multiplicador_corte,preco").in("id", ids);
+        const map: Record<string, ProdInfo> = {};
+        (data || []).forEach((p) => { map[p.id as string] = { descricao: p.descricao as string, larguraMolduraCm: Number(p.largura_moldura_cm) || 0, multiplicadorCorte: Number(p.multiplicador_corte) || 8, preco: Number(p.preco) || 0 }; });
+        setProds(map);
+      }
+      setErro("");
+    } catch (e) { setErro((e as Error).message); }
+    finally { setLoading(false); }
   }, [params.id]);
 
-  if (loading) return <p className="text-muted-foreground">Gerando PDF...</p>;
-  if (!orc) return <p className="text-muted-foreground">Orçamento não encontrado.</p>;
+  useEffect(() => { carregar(); }, [carregar]);
 
-  const pago = totalPagamentos(orc);
-  const saldo = orc.total - pago;
-  const validade = new Date(orc.criadoEm);
-  validade.setDate(validade.getDate() + orc.validadeDias);
+  if (loading) return <div className="py-10 text-center text-muted-foreground">Carregando...</div>;
+  if (!venda) return <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">{erro}</div>;
+
+  const calc = {
+    itens: venda.ambientes.flatMap((a) => a.itens.map((i) => {
+      const p = i.product_id ? prods[i.product_id] : undefined;
+      return {
+        regra: i.regra as Regra, descPct: i.desc_pct, precoOverride: i.preco_override,
+        medidas: i.medidas.map((m) => ({ l: m.l, a: m.a, q: m.q, unit: m.unit as "cm" | "mm" | "m" })),
+        produto: p ? { preco: p.preco, larguraMolduraCm: p.larguraMolduraCm, multiplicadorCorte: p.multiplicadorCorte } : undefined,
+      };
+    })),
+    desc: venda.desc_pct, acrescimo: venda.acrescimo, frete: venda.frete, instalacao: venda.instalacao,
+  };
+  const t = calcOrc(calc);
 
   return (
-    <div className="-mx-4 -my-6 min-h-screen bg-muted/60 sm:-mx-6 lg:-mx-8 print:m-0 print:bg-white">
-      {/* Toolbar */}
-      <div className="sticky top-16 z-10 flex items-center justify-between border-b bg-background px-4 py-3 print:hidden sm:px-6">
-        <Button asChild variant="ghost" size="sm" className="gap-1.5">
-          <Link href={`/orcamentos/${orc.id}`}>
-            <ArrowLeft className="h-4 w-4" />
-            Voltar
-          </Link>
-        </Button>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() =>
-              toast({
-                variant: "info",
-                title: "Download simulado",
-                description: "No sistema final, o PDF será gerado no servidor.",
-              })
-            }
-          >
-            <Download className="h-4 w-4" />
-            Baixar PDF
-          </Button>
-          <Button
-            size="sm"
-            className="gap-1.5"
-            onClick={() => window.print()}
-          >
-            <Printer className="h-4 w-4" />
-            Imprimir
-          </Button>
-        </div>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 print:hidden">
+        <Button asChild variant="outline" className="gap-1.5"><Link href={`/orcamentos/${venda.id}`}><ArrowLeft className="h-4 w-4" /> Voltar</Link></Button>
+        <Button className="ml-auto gap-1.5" onClick={() => window.print()}><Printer className="h-4 w-4" /> Imprimir / Salvar PDF</Button>
       </div>
 
-      {/* Documento A4 */}
-      <div className="flex justify-center px-4 py-8 print:p-0">
-        <div className="w-full max-w-[210mm] bg-white p-10 text-[13px] leading-relaxed text-slate-800 shadow-lg print:max-w-none print:shadow-none">
-          {/* Cabeçalho */}
-          <div className="flex items-start justify-between border-b border-slate-200 pb-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary">
-                <GalleryVerticalEnd className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <p className="text-base font-semibold text-slate-900">
-                  {EMPRESA.nome}
-                </p>
-                <p className="text-xs text-slate-500">CNPJ {EMPRESA.cnpj}</p>
-                <p className="text-xs text-slate-500">
-                  {EMPRESA.telefone} • {EMPRESA.email}
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-lg font-bold text-slate-900">ORÇAMENTO</p>
-              <p className="text-sm font-medium text-primary">Nº {orc.numero}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Emissão: {formatDate(orc.criadoEm)}
-              </p>
-              <p className="text-xs text-slate-500">
-                Validade: {formatDate(validade)}
-              </p>
-            </div>
-          </div>
-
-          {/* Cliente / Obra */}
-          <div className="grid grid-cols-2 gap-6 py-5">
-            <div>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Cliente
-              </p>
-              <p className="font-medium text-slate-900">{orc.clienteNome}</p>
-              <p className="text-xs text-slate-500">Vendedor: {orc.vendedorNome}</p>
-            </div>
-            <div>
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Obra
-              </p>
-              <p className="font-medium text-slate-900">
-                {orc.obraNome ?? "—"}
-              </p>
-            </div>
-          </div>
-
-          {/* Itens por ambiente */}
-          {orc.ambientes.map((amb) => (
-            <div key={amb.id} className="mb-4">
-              <p className="mb-2 rounded bg-slate-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                {amb.nome}
-              </p>
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-400">
-                    <th className="py-1.5 pr-2 font-medium">Descrição</th>
-                    <th className="py-1.5 px-2 font-medium">Medidas</th>
-                    <th className="py-1.5 px-2 text-right font-medium">Qtd.</th>
-                    <th className="py-1.5 px-2 text-right font-medium">Unit.</th>
-                    <th className="py-1.5 pl-2 text-right font-medium">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {amb.itens.map((item) => (
-                    <tr key={item.id} className="border-b border-slate-100 align-top">
-                      <td className="py-2 pr-2">
-                        <p className="font-medium text-slate-800">
-                          {item.produtoNome}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {UNIDADE_CALCULO_LABEL[item.unidade]}
-                        </p>
-                      </td>
-                      <td className="py-2 px-2 text-xs text-slate-500">
-                        {item.medidas
-                          .map(
-                            (m) =>
-                              `${m.quantidade}× ${formatNumber(m.largura)}×${formatNumber(m.altura)}`,
-                          )
-                          .join(", ")}
-                      </td>
-                      <td className="py-2 px-2 text-right">
-                        {formatNumber(item.quantidadeTotal)}
-                      </td>
-                      <td className="py-2 px-2 text-right">
-                        {formatCurrency(item.precoUnitario)}
-                      </td>
-                      <td className="py-2 pl-2 text-right font-medium">
-                        {formatCurrency(item.total)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
-
-          {/* Totais */}
-          <div className="mt-6 flex justify-end">
-            <div className="w-64 space-y-1.5">
-              <div className="flex justify-between text-slate-500">
-                <span>Subtotal</span>
-                <span>{formatCurrency(orc.subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-slate-500">
-                <span>Desconto ({formatNumber(orc.descontoPercentual, 0)}%)</span>
-                <span>− {formatCurrency(orc.descontoValor)}</span>
-              </div>
-              <div className="flex justify-between border-t border-slate-300 pt-1.5 text-base font-bold text-slate-900">
-                <span>Total</span>
-                <span>{formatCurrency(orc.total)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Pagamento */}
-          <div className="mt-8">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              Condições de pagamento
+      <div className="mx-auto max-w-3xl rounded-lg border bg-white p-8 text-black shadow-sm print:border-0 print:shadow-none">
+        {/* cabeçalho da empresa (identidade da loja da venda) */}
+        <div className="flex items-start justify-between border-b pb-4">
+          <div>
+            <h1 className="text-xl font-bold">{emp?.nome}</h1>
+            {emp?.loja && <p className="text-sm">{emp.loja}</p>}
+            <p className="text-sm text-neutral-600">
+              {emp?.cnpj && <>CNPJ {emp.cnpj} · </>}{emp?.cidade}{emp?.uf ? `/${emp.uf}` : ""}
             </p>
-            {orc.pagamentos.length === 0 ? (
-              <p className="text-xs text-slate-500">A combinar.</p>
-            ) : (
-              <ul className="space-y-1 text-xs text-slate-600">
-                {orc.pagamentos.map((p) => (
-                  <li key={p.id} className="flex justify-between">
-                    <span>
-                      {FORMA_PAGAMENTO_LABEL[p.forma]}
-                      {p.parcelas > 1 && ` em ${p.parcelas}x`}
-                      {p.observacao && ` — ${p.observacao}`}
-                    </span>
-                    <span className="font-medium">{formatCurrency(p.valor)}</span>
-                  </li>
-                ))}
-                <li className="flex justify-between border-t border-slate-200 pt-1 font-medium text-slate-800">
-                  <span>Saldo restante</span>
-                  <span>{formatCurrency(saldo)}</span>
-                </li>
-              </ul>
-            )}
+            {emp?.resp && <p className="text-sm text-neutral-600">Resp.: {emp.resp}</p>}
           </div>
-
-          {orc.observacoes && (
-            <div className="mt-6 rounded-lg bg-slate-50 p-4">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Observações
-              </p>
-              <p className="text-xs text-slate-600">{orc.observacoes}</p>
-            </div>
-          )}
-
-          {/* Rodapé */}
-          <div className="mt-10 border-t border-slate-200 pt-4 text-center text-[11px] text-slate-400">
-            {EMPRESA.endereco} — Orçamento válido por {orc.validadeDias} dias.
-            Documento gerado pelo VidroGestor.
+          <div className="text-right">
+            <p className="text-sm font-semibold">{venda.venda_gerada ? "PEDIDO DE VENDA" : "ORÇAMENTO"} #{venda.numero ?? ""}</p>
+            <p className="text-xs text-neutral-600">{formatDate(venda.created_at)}</p>
+            <p className="text-xs text-neutral-600">{labelSituacao(venda.situacao)}</p>
           </div>
         </div>
+
+        {/* cliente */}
+        <div className="border-b py-3 text-sm">
+          <p><span className="font-semibold">Cliente:</span> {venda.cliente_nome}</p>
+          {venda.vend_nome && <p><span className="font-semibold">Vendedor:</span> {venda.vend_nome}</p>}
+        </div>
+
+        {/* itens */}
+        {venda.ambientes.map((a, ai) => (
+          <div key={ai} className="py-3">
+            <p className="mb-1 text-sm font-semibold">{a.nome}</p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-neutral-500">
+                  <th className="py-1">Item</th><th className="py-1 text-right">Qtd</th><th className="py-1 text-right">Preço</th><th className="py-1 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {a.itens.map((it, ii) => {
+                  const p = it.product_id ? prods[it.product_id] : undefined;
+                  const li = totalItem({
+                    regra: it.regra as Regra, descPct: it.desc_pct, precoOverride: it.preco_override,
+                    medidas: it.medidas.map((m) => ({ l: m.l, a: m.a, q: m.q, unit: m.unit as "cm" | "mm" | "m" })),
+                    produto: p ? { preco: p.preco, larguraMolduraCm: p.larguraMolduraCm, multiplicadorCorte: p.multiplicadorCorte } : undefined,
+                  });
+                  const qtd = it.medidas.reduce((s, m) => s + qtdMedida(it.regra as Regra, { l: m.l, a: m.a, q: m.q, unit: m.unit as "cm" | "mm" | "m" }, p), 0);
+                  return (
+                    <tr key={ii} className="border-b border-neutral-100 align-top">
+                      <td className="py-1">{p?.descricao || "Item"}</td>
+                      <td className="py-1 text-right">{qtd.toFixed(2)}</td>
+                      <td className="py-1 text-right">{formatCurrency(li.preco)}</td>
+                      <td className="py-1 text-right">{formatCurrency(li.total)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ))}
+
+        {/* totais */}
+        <div className="ml-auto mt-2 max-w-xs space-y-1 text-sm">
+          <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(t.sub)}</span></div>
+          {t.descV > 0 && <div className="flex justify-between"><span>Desconto</span><span>-{formatCurrency(t.descV)}</span></div>}
+          {venda.acrescimo > 0 && <div className="flex justify-between"><span>Acréscimo</span><span>{formatCurrency(venda.acrescimo)}</span></div>}
+          {venda.frete > 0 && <div className="flex justify-between"><span>Frete</span><span>{formatCurrency(venda.frete)}</span></div>}
+          {venda.instalacao > 0 && <div className="flex justify-between"><span>Instalação</span><span>{formatCurrency(venda.instalacao)}</span></div>}
+          <div className="flex justify-between border-t pt-1 text-base font-bold"><span>Total</span><span>{formatCurrency(t.total)}</span></div>
+        </div>
+
+        {/* condições / observações */}
+        {(venda.prazo_dias != null || typeof venda.condicao === "string") && (
+          <div className="mt-4 border-t pt-3 text-sm">
+            {venda.prazo_dias != null && <p><span className="font-semibold">Prazo:</span> {venda.prazo_dias} dias</p>}
+            {typeof venda.condicao === "string" && venda.condicao && <p><span className="font-semibold">Condição:</span> {venda.condicao}</p>}
+          </div>
+        )}
+        {venda.obs && <div className="mt-2 text-sm"><span className="font-semibold">Observações:</span> {venda.obs}</div>}
+
+        <p className="mt-6 border-t pt-3 text-center text-xs text-neutral-500">
+          {emp?.nome}{emp?.cnpj ? ` · CNPJ ${emp.cnpj}` : ""} — documento gerado pelo sistema.
+        </p>
       </div>
     </div>
   );
