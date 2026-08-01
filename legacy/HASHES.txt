@@ -1,0 +1,5 @@
+arquivo: vidrogestor-congelado.html
+tamanho_bytes: 572622
+md5:    6e817e4a919c58393d75bfe4ad7259a9
+sha256: 29124a27770c3cf73725e469509cd70e61e2b3584f1bc4758e0b889aa23bc529
+data_congelamento: 2026-08-01
