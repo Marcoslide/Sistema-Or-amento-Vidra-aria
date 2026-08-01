@@ -12,10 +12,12 @@ Estes passos exigem **suas credenciais** — eu não as tenho e não as crio (§
 ## 1. Criar projeto Supabase (staging)
 
 1. https://supabase.com → New project → nome `vidrogestor-staging`, região Brasil/leste EUA, senha do banco.
-2. **SQL Editor** → rode, na ordem:
+2. **SQL Editor** → rode, **nesta ordem** (banco vazio; detalhes em
+   `docs/fase2/homologacao-staging.md`):
    - `supabase/schema.sql`
    - `supabase/rls.sql`
-   - `supabase/seed.sql`
+   - `supabase/migrations/0001_commercial.sql`
+   - `supabase/seed-staging.sql`  *(seed exclusivo de staging; `supabase/seed.sql` é o demo antigo)*
 3. **Authentication → Providers**: habilite **Email** (senha). Desative "Confirm email" para agilizar o staging.
 4. **Authentication → Users → Add user**: crie os usuários demo (ver tabela abaixo).
 5. Para cada usuário criado, rode no SQL Editor o bloco comentado em `seed.sql`

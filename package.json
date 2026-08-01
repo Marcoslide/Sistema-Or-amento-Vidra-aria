@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test:calc": "node --test --experimental-strip-types tests/commercial/calc.test.ts"
+    "test:calc": "node --test --experimental-strip-types tests/commercial/calc.test.ts",
+    "test:staging": "node --test tests/integration/staging.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.1",
