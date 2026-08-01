@@ -1,19 +1,20 @@
 === VERSÃO OFICIAL (mais recente) ===
-arquivo: vidrogestor-congelado-v5.html  (cópia idêntica em vidrogestor-congelado.html)
-tamanho_bytes: 614333
-linhas: 4304
-md5:    00e3d68ee2ef14956d41c6fa681957b4
-sha256: 95ad5e16f755c7d6f1c8c415e8bc0655a123845f3673de9c170f4e398d9e7c97
+arquivo: vidrogestor-congelado-v6.html  (cópia idêntica em vidrogestor-congelado.html)
+tamanho_bytes: 633067
+linhas: 4428
+md5:    d85cb97735953c97639b5638a2766718
+sha256: 554dae3439c3f9f293b6998399a56cd75311ca8b5e6c6d02dab1e19631d62a47
 data: 2026-08-01
 
-O vidrogestor-standalone.html é a v5 SEM a linha <link rel="manifest"> (abrir por
-file:// no celular). Fonte oficial = vidrogestor-congelado-v5.html.
+O vidrogestor-standalone.html é a v6 SEM a linha <link rel="manifest"> (abrir por
+file:// no celular). Fonte oficial = vidrogestor-congelado-v6.html.
 
 Histórico:
 - v1: 6e817e4a919c58393d75bfe4ad7259a9 / 572622 bytes — auditoria estática (363).
 - v2: ff0ddf50f9accd41d1febec985d1749e / 574495 bytes — lojas ativas/inativas.
 - v3: 5a92ab172b47cf7e48727ccaf140d82c / 580072 bytes — regra MOLDURA + fim do fallback L1.
-- v4: 647495bdc9e8dc7884bb6c9fd9e03ffa / 585084 bytes — dados da empresa nos documentos + Descrição no Contas a Pagar.
-- v5: 00e3d68ee2ef14956d41c6fa681957b4 / 614333 bytes — CRUD completo + exclusão segura em Contas financeiras,
-      Operadoras e Vendedores (sub-lote 1 do lote de CRUD).
-      Bateria: 439/439 (363 regressão + 33 auditoria + 25 MOLDURA + 18 CRUD), 0 erro JS.
+- v4: 647495bdc9e8dc7884bb6c9fd9e03ffa / 585084 bytes — dados da empresa + Descrição no Contas a Pagar.
+- v5: 00e3d68ee2ef14956d41c6fa681957b4 / 614333 bytes — CRUD/exclusão segura: Contas, Operadoras, Vendedores.
+- v6: d85cb97735953c97639b5638a2766718 / 633067 bytes — CRUD/exclusão segura: Centro de Custos (Hora-Homem, Hora-Máquina,
+      Depreciação/Bens, Centros, Custos) + Lojas, Usuários e Perfis (guardas críticas).
+      Bateria: 477/477 (363 + 33 auditoria + 25 MOLDURA + 56 CRUD), 0 erro JS.
