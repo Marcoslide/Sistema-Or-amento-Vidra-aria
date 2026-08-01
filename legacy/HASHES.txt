@@ -1,19 +1,19 @@
 === VERSÃO OFICIAL (mais recente) ===
-arquivo: vidrogestor-congelado-v4.html  (cópia idêntica em vidrogestor-congelado.html)
-tamanho_bytes: 585084
-linhas: 4114
-md5:    647495bdc9e8dc7884bb6c9fd9e03ffa
-sha256: 49e4d4a19a039fe1705a81038c12ab64d13a613c41c213cfb368fcecb8c6a4b2
+arquivo: vidrogestor-congelado-v5.html  (cópia idêntica em vidrogestor-congelado.html)
+tamanho_bytes: 614333
+linhas: 4304
+md5:    00e3d68ee2ef14956d41c6fa681957b4
+sha256: 95ad5e16f755c7d6f1c8c415e8bc0655a123845f3673de9c170f4e398d9e7c97
 data: 2026-08-01
 
-Nota sobre o standalone: vidrogestor-standalone.html é a v4 SEM a linha
-<link rel="manifest"> (para abrir por file:// no celular). Difere por exatamente
-essa linha — NÃO é a fonte oficial. A fonte oficial é vidrogestor-congelado-v4.html.
+O vidrogestor-standalone.html é a v5 SEM a linha <link rel="manifest"> (abrir por
+file:// no celular). Fonte oficial = vidrogestor-congelado-v5.html.
 
 Histórico:
 - v1: 6e817e4a919c58393d75bfe4ad7259a9 / 572622 bytes — auditoria estática (363).
-- v2: ff0ddf50f9accd41d1febec985d1749e / 574495 bytes — auditoria funcional; lojas ativas/inativas.
-- v3: 5a92ab172b47cf7e48727ccaf140d82c / 580072 bytes — regra MOLDURA + eliminação do fallback L1.
-- v4: 647495bdc9e8dc7884bb6c9fd9e03ffa / 585084 bytes — dados da empresa (endereço completo) no cabeçalho/rodapé
-      central dos documentos + campo "Descrição da despesa" no Contas a Pagar.
-      Bateria: 421/421 (363 regressão + 33 auditoria funcional + 25 MOLDURA), 0 erro JS.
+- v2: ff0ddf50f9accd41d1febec985d1749e / 574495 bytes — lojas ativas/inativas.
+- v3: 5a92ab172b47cf7e48727ccaf140d82c / 580072 bytes — regra MOLDURA + fim do fallback L1.
+- v4: 647495bdc9e8dc7884bb6c9fd9e03ffa / 585084 bytes — dados da empresa nos documentos + Descrição no Contas a Pagar.
+- v5: 00e3d68ee2ef14956d41c6fa681957b4 / 614333 bytes — CRUD completo + exclusão segura em Contas financeiras,
+      Operadoras e Vendedores (sub-lote 1 do lote de CRUD).
+      Bateria: 439/439 (363 regressão + 33 auditoria + 25 MOLDURA + 18 CRUD), 0 erro JS.

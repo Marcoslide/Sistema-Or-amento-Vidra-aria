@@ -4112,3 +4112,193 @@ function salvarMaquina(){const nome=(document.getElementById("mq-nome").value||"
   document.addEventListener("DOMContentLoaded",()=>{const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);if(isIOS){const b=ensureBtn();if(b)b.style.display="";}});
 })();
 </script>
+
+<script>
+/* ============================================================
+   SUB-LOTE CRUD 1 — Exclusão segura + Contas financeiras, Operadoras e Vendedores
+   (sobrescreve as VIEWS placeholder; não altera as demais telas)
+   ============================================================ */
+
+/* ---- permissões de exclusão ---- */
+(function(){const extra=[["fin.excluir_contas","Excluir contas financeiras"],["fin.excluir_operadoras","Excluir operadoras"],["cad.excluir_vendedores","Excluir vendedores"]];
+  extra.forEach(p=>{if(!PERMS.some(x=>x[0]===p[0]))PERMS.push(p);});
+  DB.perfis.forEach(pf=>{if(pf.id==="admin"||pf.id==="admin_loja"){extra.forEach(p=>{if(!pf.perms.includes(p[0]))pf.perms.push(p[0]);});}});
+  const finp=DB.perfis.find(p=>p.id==="financeiro");if(finp)["fin.excluir_contas","fin.excluir_operadoras"].forEach(p=>{if(!finp.perms.includes(p))finp.perms.push(p);});
+})();
+
+/* ---- migração de modelo (id + campos), preservando dados demo ---- */
+(function(){
+  DB.contas.forEach(c=>{if(!c.id)c.id=uid("cf");const d={banco:"",agencia:"",numero:"",digito:"",titular:"",doc:"",lojaId:"",saldoInicial:0,dataSaldo:"",aceitaEntrada:true,aceitaSaida:true,padrao:false,obs:""};Object.keys(d).forEach(k=>{if(c[k]===undefined)c[k]=d[k];});if(c.ativo===undefined)c.ativo=true;});
+  DB.operadoras.forEach(o=>{if(!o.id)o.id=uid("op");const d={lojaId:"",tipo:"ambos",bandeiras:"",prazo:"",antecipacao:false,taxaAntecip:0,obs:""};Object.keys(d).forEach(k=>{if(o[k]===undefined)o[k]=d[k];});if(!o.parc)o.parc=[];if(o.ativo===undefined)o.ativo=true;});
+  DB.vendedores.forEach(v=>{const d={email:"",tel:"",usuarioId:"",meta:0,comissao:0,obs:""};Object.keys(d).forEach(k=>{if(v[k]===undefined)v[k]=d[k];});if(!v.lojas)v.lojas=[];if(v.ativo===undefined)v.ativo=true;});
+})();
+
+/* ---- helpers de vínculo ---- */
+function _cnt(arr,pred){try{return (arr||[]).filter(pred).length;}catch(e){return 0;}}
+function vinculosConta(c){const nome=c.nome;let rec=0;(DB.orcamentos||[]).forEach(o=>rec+=_cnt(o.recebimentos,r=>r.contaId===nome));
+  let pag=0;(DB.contasPagar||[]).forEach(cp=>pag+=_cnt(cp.pagamentos,p=>p.contaFin===nome));
+  const ope=_cnt(DB.operadoras,o=>o.conta===nome);const loj=_cnt(DB.lojas,l=>(l.contas||[]).includes(nome));
+  const det=[];if(rec)det.push({label:"recebimentos",n:rec});if(pag)det.push({label:"pagamentos",n:pag});if(ope)det.push({label:"operadoras vinculadas",n:ope});if(loj)det.push({label:"lojas usando a conta",n:loj});
+  return {total:rec+pag+ope+loj,det};}
+function vinculosOperadora(op){let rec=0;(DB.orcamentos||[]).forEach(o=>rec+=_cnt(o.recebimentos,r=>r.operadora===op.nome));const det=[];if(rec)det.push({label:"recebimentos",n:rec});return {total:rec,det};}
+function vinculosVendedor(v){const vend=_cnt(DB.orcamentos,o=>o.vendNome===v.nome||(v.id&&o.vendedorId===v.id));const us=_cnt(DB.usuarios,u=>u.vendedorId===v.id);const det=[];if(vend)det.push({label:"vendas",n:vend});if(us)det.push({label:"usuários vinculados",n:us});return {total:vend+us,det};}
+
+/* ---- modal de exclusão segura ---- */
+function excluirSeguro(opts){
+  if(opts.perm&&typeof can==="function"&&!can(opts.perm)){toast("Sem permissão","Seu perfil não pode excluir "+(opts.tipoLabel||"este cadastro")+".","warn2");return;}
+  const v=opts.vinc||{total:0,det:[]};
+  if(v.total>0){const lista=v.det.map(d=>`<li>${d.n} ${esc(d.label)}</li>`).join("");
+    window.__inat=opts.onInativar;
+    modal(`<div class="dlg-h"><b>Não é possível excluir</b><button class="x" onclick="closeModal()">✕</button></div>
+     <div class="dlg-b"><p style="color:var(--muted)">“${esc(opts.nome)}” possui utilização no sistema e não pode ser apagado:</p>
+      <ul style="margin:10px 0 0;padding-left:18px;color:var(--danger);font-size:13px;line-height:1.7">${lista}</ul>
+      <p class="subtle" style="margin-top:12px">Para preservar o histórico, o cadastro será <b>inativado</b> (deixa de aparecer em novos lançamentos).</p></div>
+     <div class="dlg-f"><button class="btn btn-outline" onclick="closeModal()">Fechar</button>${opts.onInativar?`<button class="btn btn-primary" onclick="closeModal();(window.__inat||function(){})()">Inativar cadastro</button>`:""}</div>`,"sm");
+    return;}
+  window.__ok=opts.onExcluir;
+  modal(`<div class="dlg-h"><b>Excluir ${esc(opts.tipoLabel||"cadastro")}</b><button class="x" onclick="closeModal()">✕</button></div>
+   <div class="dlg-b"><p style="color:var(--muted)">Excluir “<b>${esc(opts.nome)}</b>” definitivamente?</p>
+    <p class="subtle" style="margin-top:8px">Este cadastro não possui vínculos e poderá ser excluído. Esta ação não poderá ser desfeita.</p></div>
+   <div class="dlg-f"><button class="btn btn-outline" onclick="closeModal()">Cancelar</button><button class="btn btn-danger" onclick="closeModal();(window.__ok||function(){})()">Excluir definitivamente</button></div>`,"sm");
+}
+
+/* ---- barra de ações em massa ---- */
+function crudMassBar(scope,cfg){const s=selSet(scope);if(!s||!s.size)return "";
+  return `<div class="toolbar" style="background:#eef4ff;border:1px solid #cfe0ff;border-radius:10px;padding:8px 12px;margin-bottom:12px;align-items:center"><b>${s.size} selecionado(s)</b><span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">${cfg.inativar?`<button class="btn btn-outline btn-sm" onclick="${cfg.inativar}">Inativar</button>`:""}${cfg.reativar?`<button class="btn btn-outline btn-sm" onclick="${cfg.reativar}">Reativar</button>`:""}${cfg.excluir?`<button class="btn btn-danger btn-sm" onclick="${cfg.excluir}">Excluir</button>`:""}<button class="btn btn-ghost btn-sm" onclick="selClear('${scope}')">Limpar seleção</button></span></div>`;}
+function _selIds(scope){return [...(selSet(scope)||[])];}
+function _lojaNome(id){return (DB.lojas.find(l=>l.id===id)||{}).nome||"—";}
+function _stBadge(a){return a!==false?'<span class="badge b-success">Ativo</span>':'<span class="badge b-muted">Inativo</span>';}
+function _lojaOpts(sel){const arr=(typeof lojasSelecionaveis==="function")?lojasSelecionaveis():DB.lojas.map(l=>({id:l.id,nome:l.nome}));return `<option value="">—</option>`+arr.map(l=>`<option value="${l.id}" ${sel===l.id?"selected":""}>${esc(l.nome)}</option>`).join("");}
+
+/* ============================ CONTAS FINANCEIRAS ============================ */
+const CONTA_TIPOS=["Caixa","Conta corrente","Conta poupança","Carteira digital","Conta de recebimento","Adquirente","Banco","Outro"];
+VIEWS.contas=()=>{const scope="cf";const list=DB.contas.slice();const ids=list.map(c=>c.id);
+  const mass=crudMassBar(scope,{inativar:"cfMass('inativar')",reativar:"cfMass('reativar')",excluir:"cfMass('excluir')"});
+  return ph("Contas de Recebimento","Contas usadas para receber e pagar. Contas com movimentação não podem ser excluídas, apenas inativadas.",btn("Nova conta","btn-primary","openContaForm()","plus"))
+  +mass+`<div class="card cp-tablewrap"><table class="tbl" style="min-width:820px"><thead><tr>${cbHead(scope,ids)}<th>Conta</th><th>Tipo</th><th>Banco / Nº</th><th>Loja</th><th style="text-align:right">Saldo inicial</th><th>Status</th><th style="padding-right:14px"></th></tr></thead><tbody>
+  ${list.length?list.map(c=>`<tr class="row-click" onclick="openContaForm('${c.id}')">${cbCell(scope,c.id)}<td style="font-weight:600">${esc(c.nome)}${c.padrao?' <span class="badge b-primary" style="font-size:10px">padrão</span>':''}</td><td class="subtle">${esc(c.tipo||"—")}</td><td class="subtle">${esc([c.banco,c.numero].filter(Boolean).join(" ")||"—")}</td><td class="subtle">${esc(c.lojaId?_lojaNome(c.lojaId):"Todas")}</td><td style="text-align:right" class="tnum">${money(num0(c.saldoInicial))}</td><td>${_stBadge(c.ativo)}</td><td style="padding-right:14px;text-align:right" onclick="event.stopPropagation()">${menu([["Abrir / editar","openContaForm('"+c.id+"')","","edit"],["Duplicar","dupConta('"+c.id+"')","","copy"],[c.ativo!==false?"Inativar":"Reativar","toggleConta('"+c.id+"')","","off"],"-",["Excluir","delConta('"+c.id+"')","danger","trash"]])}</td></tr>`).join(""):`<tr><td colspan="8"><div class="empty">${svg("bank",34)}<p>Nenhuma conta cadastrada.</p></div></td></tr>`}
+  </tbody></table></div>`;};
+function openContaForm(id){if(typeof can==="function"&&!can("adm.config")&&!can("fin.contas_receber")){toast("Sem permissão","","warn2");return;}
+  const c=id?DB.contas.find(x=>x.id===id):{id:"",nome:"",tipo:"Conta corrente",banco:"",agencia:"",numero:"",digito:"",titular:"",doc:"",lojaId:"",saldoInicial:0,dataSaldo:hojeBR(),aceitaEntrada:true,aceitaSaida:true,padrao:false,ativo:true,obs:""};
+  window.__cfId=id||"";
+  modal(`<div class="dlg-h"><b>${id?"Editar":"Nova"} conta financeira</b><button class="x" onclick="closeModal()">✕</button></div>
+   <div class="dlg-b"><div class="grid g2">
+     <div><label class="lbl">Nome da conta *</label><input class="inp" id="cf-nome" value="${esc(c.nome)}"><div class="field-err" id="cf-err"></div></div>
+     <div><label class="lbl">Tipo</label><select class="inp" id="cf-tipo">${CONTA_TIPOS.map(t=>`<option ${c.tipo===t?"selected":""}>${t}</option>`).join("")}</select></div>
+     <div><label class="lbl">Banco</label><input class="inp" id="cf-banco" value="${esc(c.banco)}"></div>
+     <div><label class="lbl">Agência</label><input class="inp" id="cf-agencia" value="${esc(c.agencia)}"></div>
+     <div><label class="lbl">Número da conta</label><input class="inp" id="cf-numero" value="${esc(c.numero)}"></div>
+     <div><label class="lbl">Dígito</label><input class="inp" id="cf-digito" value="${esc(c.digito)}"></div>
+     <div><label class="lbl">Titular</label><input class="inp" id="cf-titular" value="${esc(c.titular)}"></div>
+     <div><label class="lbl">CPF/CNPJ do titular</label><input class="inp" id="cf-doc" value="${esc(c.doc)}"></div>
+     <div><label class="lbl">Loja / operação</label><select class="inp" id="cf-loja">${_lojaOpts(c.lojaId)}</select></div>
+     <div><label class="lbl">Saldo inicial</label><input class="inp" type="number" step="0.01" id="cf-saldo" value="${num0(c.saldoInicial)}"></div>
+     <div><label class="lbl">Data do saldo inicial</label><input class="inp" type="date" id="cf-data" value="${brToISO(c.dataSaldo)||''}"></div>
+     <div style="align-self:end;display:flex;gap:16px;flex-wrap:wrap">
+       <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="cf-ent" ${c.aceitaEntrada!==false?"checked":""} style="accent-color:var(--primary)">Aceita entradas</label>
+       <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="cf-sai" ${c.aceitaSaida!==false?"checked":""} style="accent-color:var(--primary)">Aceita saídas</label>
+     </div>
+     <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+       <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="cf-padrao" ${c.padrao?"checked":""} style="accent-color:var(--primary)">Conta padrão</label>
+       <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="cf-ativo" ${c.ativo!==false?"checked":""} style="accent-color:var(--primary)">Ativa</label>
+     </div>
+     <div style="grid-column:1/3"><label class="lbl">Observações</label><textarea class="inp" id="cf-obs" rows="2">${esc(c.obs)}</textarea></div>
+   </div></div>
+   <div class="dlg-f"><button class="btn btn-outline" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarConta()">${svg("save",16)} Salvar conta</button></div>`,"lg");}
+function salvarConta(){const id=window.__cfId;const g=k=>document.getElementById("cf-"+k);const nome=g("nome").value.trim();
+  if(!nome){g("err").textContent="Informe o nome da conta.";return;}
+  const dupNome=DB.contas.some(x=>x.nome.toLowerCase()===nome.toLowerCase()&&x.id!==id);if(dupNome){g("err").textContent="Já existe uma conta com esse nome.";return;}
+  const data={nome,tipo:g("tipo").value,banco:g("banco").value.trim(),agencia:g("agencia").value.trim(),numero:g("numero").value.trim(),digito:g("digito").value.trim(),titular:g("titular").value.trim(),doc:g("doc").value.trim(),lojaId:g("loja").value,saldoInicial:num0(g("saldo").value),dataSaldo:isoToBR(g("data").value),aceitaEntrada:g("ent").checked,aceitaSaida:g("sai").checked,padrao:g("padrao").checked,ativo:g("ativo").checked,obs:g("obs").value.trim()};
+  if(data.padrao)DB.contas.forEach(x=>{if(x.id!==id)x.padrao=false;});
+  if(id){const c=DB.contas.find(x=>x.id===id);const antes=c.nome;Object.assign(c,data);if(antes!==nome){/* mantém referências por nome antigo? renomear não altera históricos */}audit("Editou conta financeira","Contas",nome);toast("Conta atualizada",nome);}
+  else{data.id=uid("cf");DB.contas.push(data);audit("Criou conta financeira","Contas",nome);toast("Conta criada",nome);}
+  closeModal();go("contas");}
+function dupConta(id){const c=DB.contas.find(x=>x.id===id);if(!c)return;const n=Object.assign({},c,{id:uid("cf"),nome:c.nome+" (cópia)",padrao:false});DB.contas.push(n);audit("Duplicou conta financeira","Contas",n.nome);toast("Conta duplicada",n.nome);go("contas");}
+function toggleConta(id){const c=DB.contas.find(x=>x.id===id);if(!c)return;c.ativo=c.ativo===false;audit(c.ativo?"Reativou conta":"Inativou conta","Contas",c.nome);toast("Conta "+(c.ativo?"reativada":"inativada"),c.nome,c.ativo?"ok":"warn2");go("contas");}
+function delConta(id){const c=DB.contas.find(x=>x.id===id);if(!c)return;excluirSeguro({perm:"fin.excluir_contas",tipoLabel:"conta financeira",nome:c.nome,vinc:vinculosConta(c),onInativar:()=>{c.ativo=false;audit("Inativou conta (com vínculo)","Contas",c.nome);toast("Conta inativada",c.nome,"warn2");go("contas");},onExcluir:()=>{DB.contas=DB.contas.filter(x=>x.id!==id);audit("Excluiu conta financeira","Contas",c.nome);toast("Conta excluída",c.nome,"warn2");go("contas");}});}
+function cfMass(acao){const ids=_selIds("cf");if(!ids.length)return;let ok=0,blk=0;
+  ids.forEach(id=>{const c=DB.contas.find(x=>x.id===id);if(!c)return;if(acao==="inativar"){c.ativo=false;ok++;}else if(acao==="reativar"){c.ativo=true;ok++;}else if(acao==="excluir"){if(vinculosConta(c).total>0){c.ativo=false;blk++;}else{DB.contas=DB.contas.filter(x=>x.id!==id);ok++;}}});
+  audit("Ação em massa ("+acao+") contas","Contas",ids.length+" itens");selClear("cf");
+  toast("Ação concluída",acao==="excluir"?(ok+" excluída(s), "+blk+" com vínculo inativada(s).") :(ok+" conta(s) "+(acao==="inativar"?"inativada(s)":"reativada(s)")));go("contas");}
+
+/* ============================ OPERADORAS DE CARTÃO ============================ */
+function _parcToStr(parc){return (parc||[]).map(p=>p[0]+":"+p[1]).join(", ");}
+function _strToParc(s){return (s||"").split(",").map(x=>x.trim()).filter(Boolean).map(x=>{const p=x.split(":");return [num0(p[0])||1,num0(p[1])];}).filter(p=>p[0]>0);}
+VIEWS.operadoras=()=>{const scope="op";const list=DB.operadoras.slice();const ids=list.map(o=>o.id);
+  const mass=crudMassBar(scope,{inativar:"opMass('inativar')",reativar:"opMass('reativar')",excluir:"opMass('excluir')"});
+  return ph("Operadoras de Cartão","Parcelamentos, taxas e conta de recebimento. Operadoras usadas em recebimentos não podem ser excluídas, apenas inativadas.",btn("Nova operadora","btn-primary","openOperadoraForm()","plus"))
+  +mass+`<div class="card cp-tablewrap"><table class="tbl" style="min-width:820px"><thead><tr>${cbHead(scope,ids)}<th>Operadora</th><th>Tipo</th><th>Conta de recebimento</th><th>Prazo</th><th>Parcelas/taxas</th><th>Status</th><th style="padding-right:14px"></th></tr></thead><tbody>
+  ${list.length?list.map(o=>`<tr class="row-click" onclick="openOperadoraForm('${o.id}')">${cbCell(scope,o.id)}<td style="font-weight:600">${esc(o.nome)}</td><td class="subtle">${esc({credito:"Crédito",debito:"Débito",ambos:"Crédito e débito"}[o.tipo]||o.tipo||"—")}</td><td class="subtle">${esc(o.conta||"—")}</td><td class="subtle">${esc(o.prazo||"—")}</td><td class="subtle" style="font-size:12px">${esc(_parcToStr(o.parc)||"—")}</td><td>${_stBadge(o.ativo)}</td><td style="padding-right:14px;text-align:right" onclick="event.stopPropagation()">${menu([["Abrir / editar","openOperadoraForm('"+o.id+"')","","edit"],["Duplicar","dupOperadora('"+o.id+"')","","copy"],[o.ativo!==false?"Inativar":"Reativar","toggleOperadora('"+o.id+"')","","off"],"-",["Excluir","delOperadora('"+o.id+"')","danger","trash"]])}</td></tr>`).join(""):`<tr><td colspan="8"><div class="empty">${svg("card",34)}<p>Nenhuma operadora cadastrada.</p></div></td></tr>`}
+  </tbody></table></div>`;};
+function openOperadoraForm(id){if(typeof can==="function"&&!can("adm.config")&&!can("fin.contas_receber")){toast("Sem permissão","","warn2");return;}
+  const o=id?DB.operadoras.find(x=>x.id===id):{id:"",nome:"",lojaId:"",conta:"",tipo:"ambos",bandeiras:"",prazo:"",parc:[],antecipacao:false,taxaAntecip:0,ativo:true,obs:""};
+  window.__opId=id||"";
+  modal(`<div class="dlg-h"><b>${id?"Editar":"Nova"} operadora</b><button class="x" onclick="closeModal()">✕</button></div>
+   <div class="dlg-b"><div class="grid g2">
+     <div><label class="lbl">Nome *</label><input class="inp" id="op-nome" value="${esc(o.nome)}"><div class="field-err" id="op-err"></div></div>
+     <div><label class="lbl">Loja / operação</label><select class="inp" id="op-loja">${_lojaOpts(o.lojaId)}</select></div>
+     <div><label class="lbl">Conta de recebimento</label><select class="inp" id="op-conta"><option value="">—</option>${DB.contas.filter(c=>c.ativo!==false).map(c=>`<option ${o.conta===c.nome?"selected":""}>${esc(c.nome)}</option>`).join("")}</select></div>
+     <div><label class="lbl">Tipo</label><select class="inp" id="op-tipo">${[["credito","Crédito"],["debito","Débito"],["ambos","Crédito e débito"]].map(([v,l])=>`<option value="${v}" ${o.tipo===v?"selected":""}>${l}</option>`).join("")}</select></div>
+     <div><label class="lbl">Bandeiras</label><input class="inp" id="op-bandeiras" value="${esc(o.bandeiras)}" placeholder="Visa, Master, Elo..."></div>
+     <div><label class="lbl">Prazo de recebimento</label><input class="inp" id="op-prazo" value="${esc(o.prazo)}" placeholder="Ex.: 1 dia, 30 dias"></div>
+     <div style="grid-column:1/3"><label class="lbl">Parcelas e taxas (%)</label><input class="inp" id="op-parc" value="${esc(_parcToStr(o.parc))}" placeholder="Ex.: 1:2.2, 3:4.5, 6:7.2"><div class="hint" style="margin-top:4px">Formato: parcelas:taxa, separadas por vírgula.</div></div>
+     <div style="align-self:end"><label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="op-antec" ${o.antecipacao?"checked":""} style="accent-color:var(--primary)">Permite antecipação</label></div>
+     <div><label class="lbl">Taxa de antecipação (%)</label><input class="inp" type="number" step="0.01" id="op-taxaant" value="${num0(o.taxaAntecip)}"></div>
+     <div style="align-self:end"><label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="op-ativo" ${o.ativo!==false?"checked":""} style="accent-color:var(--primary)">Ativa</label></div>
+     <div style="grid-column:1/3"><label class="lbl">Observações</label><textarea class="inp" id="op-obs" rows="2">${esc(o.obs)}</textarea></div>
+   </div></div>
+   <div class="dlg-f"><button class="btn btn-outline" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarOperadora()">${svg("save",16)} Salvar operadora</button></div>`,"lg");}
+function salvarOperadora(){const id=window.__opId;const g=k=>document.getElementById("op-"+k);const nome=g("nome").value.trim();
+  if(!nome){g("err").textContent="Informe o nome.";return;}
+  const dup=DB.operadoras.some(x=>x.nome.toLowerCase()===nome.toLowerCase()&&x.id!==id);if(dup){g("err").textContent="Já existe uma operadora com esse nome.";return;}
+  const data={nome,lojaId:g("loja").value,conta:g("conta").value,tipo:g("tipo").value,bandeiras:g("bandeiras").value.trim(),prazo:g("prazo").value.trim(),parc:_strToParc(g("parc").value),antecipacao:g("antec").checked,taxaAntecip:num0(g("taxaant").value),ativo:g("ativo").checked,obs:g("obs").value.trim()};
+  if(id){Object.assign(DB.operadoras.find(x=>x.id===id),data);audit("Editou operadora","Operadoras",nome);toast("Operadora atualizada",nome);}
+  else{data.id=uid("op");DB.operadoras.push(data);audit("Criou operadora","Operadoras",nome);toast("Operadora criada",nome);}
+  closeModal();go("operadoras");}
+function dupOperadora(id){const o=DB.operadoras.find(x=>x.id===id);if(!o)return;const n=Object.assign({},o,{id:uid("op"),nome:o.nome+" (cópia)",parc:(o.parc||[]).slice()});DB.operadoras.push(n);audit("Duplicou operadora","Operadoras",n.nome);toast("Operadora duplicada",n.nome);go("operadoras");}
+function toggleOperadora(id){const o=DB.operadoras.find(x=>x.id===id);if(!o)return;o.ativo=o.ativo===false;audit(o.ativo?"Reativou operadora":"Inativou operadora","Operadoras",o.nome);toast("Operadora "+(o.ativo?"reativada":"inativada"),o.nome,o.ativo?"ok":"warn2");go("operadoras");}
+function delOperadora(id){const o=DB.operadoras.find(x=>x.id===id);if(!o)return;excluirSeguro({perm:"fin.excluir_operadoras",tipoLabel:"operadora",nome:o.nome,vinc:vinculosOperadora(o),onInativar:()=>{o.ativo=false;audit("Inativou operadora (com vínculo)","Operadoras",o.nome);toast("Operadora inativada",o.nome,"warn2");go("operadoras");},onExcluir:()=>{DB.operadoras=DB.operadoras.filter(x=>x.id!==id);audit("Excluiu operadora","Operadoras",o.nome);toast("Operadora excluída",o.nome,"warn2");go("operadoras");}});}
+function opMass(acao){const ids=_selIds("op");if(!ids.length)return;let ok=0,blk=0;
+  ids.forEach(id=>{const o=DB.operadoras.find(x=>x.id===id);if(!o)return;if(acao==="inativar"){o.ativo=false;ok++;}else if(acao==="reativar"){o.ativo=true;ok++;}else if(acao==="excluir"){if(vinculosOperadora(o).total>0){o.ativo=false;blk++;}else{DB.operadoras=DB.operadoras.filter(x=>x.id!==id);ok++;}}});
+  audit("Ação em massa ("+acao+") operadoras","Operadoras",ids.length+" itens");selClear("op");
+  toast("Ação concluída",acao==="excluir"?(ok+" excluída(s), "+blk+" com vínculo inativada(s).") :(ok+" operadora(s) "+(acao==="inativar"?"inativada(s)":"reativada(s)")));go("operadoras");}
+
+/* ============================ VENDEDORES ============================ */
+VIEWS.vendedores=()=>{const scope="vd";const list=DB.vendedores.slice();const ids=list.map(v=>v.id);
+  const mass=crudMassBar(scope,{inativar:"vdMass('inativar')",reativar:"vdMass('reativar')",excluir:"vdMass('excluir')"});
+  return ph("Vendedores","Cada vendedor vê somente as próprias vendas. Vendedores com vendas não podem ser excluídos, apenas inativados.",btn("Novo vendedor","btn-primary","openVendedorForm()","plus"))
+  +mass+`<div class="card cp-tablewrap"><table class="tbl" style="min-width:820px"><thead><tr>${cbHead(scope,ids)}<th>Vendedor</th><th>Contato</th><th>Lojas</th><th style="text-align:right">Desc. máx</th><th>Status</th><th style="padding-right:14px"></th></tr></thead><tbody>
+  ${list.length?list.map(v=>`<tr class="row-click" onclick="openVendedorForm('${v.id}')">${cbCell(scope,v.id)}<td style="font-weight:600">${esc(v.nome)}</td><td class="subtle">${esc(v.email||v.tel||"—")}</td><td class="subtle">${esc((v.lojas||[]).map(_lojaNome).join(", ")||"Todas")}</td><td style="text-align:right" class="tnum">${num0(v.desc)}%</td><td>${_stBadge(v.ativo)}</td><td style="padding-right:14px;text-align:right" onclick="event.stopPropagation()">${menu([["Abrir / editar","openVendedorForm('"+v.id+"')","","edit"],["Duplicar","dupVendedor('"+v.id+"')","","copy"],[v.ativo!==false?"Inativar":"Reativar","toggleVendedor('"+v.id+"')","","off"],"-",["Excluir","delVendedor('"+v.id+"')","danger","trash"]])}</td></tr>`).join(""):`<tr><td colspan="7"><div class="empty">${svg("user",34)}<p>Nenhum vendedor cadastrado.</p></div></td></tr>`}
+  </tbody></table></div>`;};
+function openVendedorForm(id){if(typeof can==="function"&&!can("adm.usuarios")&&!can("adm.config")){toast("Sem permissão","","warn2");return;}
+  const v=id?DB.vendedores.find(x=>x.id===id):{id:"",nome:"",email:"",tel:"",usuarioId:"",lojas:[],desc:0,meta:0,comissao:0,ativo:true,obs:""};
+  window.__vdId=id||"";
+  modal(`<div class="dlg-h"><b>${id?"Editar":"Novo"} vendedor</b><button class="x" onclick="closeModal()">✕</button></div>
+   <div class="dlg-b"><div class="grid g2">
+     <div><label class="lbl">Nome *</label><input class="inp" id="vd-nome" value="${esc(v.nome)}"><div class="field-err" id="vd-err"></div></div>
+     <div><label class="lbl">E-mail</label><input class="inp" id="vd-email" value="${esc(v.email)}"></div>
+     <div><label class="lbl">Telefone</label><input class="inp" id="vd-tel" value="${esc(v.tel)}"></div>
+     <div><label class="lbl">Usuário vinculado</label><select class="inp" id="vd-user"><option value="">— nenhum —</option>${DB.usuarios.map(u=>`<option value="${u.id}" ${v.usuarioId===u.id?"selected":""}>${esc(u.nome)}</option>`).join("")}</select></div>
+     <div><label class="lbl">Limite de desconto (%)</label><input class="inp" type="number" step="0.1" id="vd-desc" value="${num0(v.desc)}"></div>
+     <div><label class="lbl">Meta (R$)</label><input class="inp" type="number" step="0.01" id="vd-meta" value="${num0(v.meta)}"></div>
+     <div><label class="lbl">Comissão (%)</label><input class="inp" type="number" step="0.01" id="vd-comissao" value="${num0(v.comissao)}"></div>
+     <div style="align-self:end"><label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="vd-ativo" ${v.ativo!==false?"checked":""} style="accent-color:var(--primary)">Ativo</label></div>
+     <div style="grid-column:1/3"><label class="lbl">Lojas de atuação</label><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${DB.lojas.map(l=>`<label style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:8px;padding:5px 9px;font-size:12px"><input type="checkbox" class="vd-loja" value="${l.id}" ${(v.lojas||[]).includes(l.id)?"checked":""} style="accent-color:var(--primary)">${esc(l.nome)}</label>`).join("")}</div><div class="hint" style="margin-top:4px">Sem seleção = todas as lojas autorizadas.</div></div>
+     <div style="grid-column:1/3"><label class="lbl">Observações</label><textarea class="inp" id="vd-obs" rows="2">${esc(v.obs)}</textarea></div>
+   </div></div>
+   <div class="dlg-f"><button class="btn btn-outline" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="salvarVendedor()">${svg("save",16)} Salvar vendedor</button></div>`,"lg");}
+function salvarVendedor(){const id=window.__vdId;const g=k=>document.getElementById("vd-"+k);const nome=g("nome").value.trim();
+  if(!nome){g("err").textContent="Informe o nome.";return;}
+  const lojas=[...document.querySelectorAll(".vd-loja:checked")].map(c=>c.value);
+  const data={nome,email:g("email").value.trim(),tel:g("tel").value.trim(),usuarioId:g("user").value,lojas,desc:num0(g("desc").value),meta:num0(g("meta").value),comissao:num0(g("comissao").value),ativo:g("ativo").checked,obs:g("obs").value.trim()};
+  if(id){Object.assign(DB.vendedores.find(x=>x.id===id),data);audit("Editou vendedor","Vendedores",nome);toast("Vendedor atualizado",nome);}
+  else{data.id=uid("v");DB.vendedores.push(data);audit("Criou vendedor","Vendedores",nome);toast("Vendedor criado",nome);}
+  closeModal();go("vendedores");}
+function dupVendedor(id){const v=DB.vendedores.find(x=>x.id===id);if(!v)return;const n=Object.assign({},v,{id:uid("v"),nome:v.nome+" (cópia)",usuarioId:"",lojas:(v.lojas||[]).slice()});DB.vendedores.push(n);audit("Duplicou vendedor","Vendedores",n.nome);toast("Vendedor duplicado",n.nome);go("vendedores");}
+function toggleVendedor(id){const v=DB.vendedores.find(x=>x.id===id);if(!v)return;v.ativo=v.ativo===false;audit(v.ativo?"Reativou vendedor":"Inativou vendedor","Vendedores",v.nome);toast("Vendedor "+(v.ativo?"reativado":"inativado"),v.nome,v.ativo?"ok":"warn2");go("vendedores");}
+function delVendedor(id){const v=DB.vendedores.find(x=>x.id===id);if(!v)return;excluirSeguro({perm:"cad.excluir_vendedores",tipoLabel:"vendedor",nome:v.nome,vinc:vinculosVendedor(v),onInativar:()=>{v.ativo=false;audit("Inativou vendedor (com vínculo)","Vendedores",v.nome);toast("Vendedor inativado",v.nome,"warn2");go("vendedores");},onExcluir:()=>{DB.vendedores=DB.vendedores.filter(x=>x.id!==id);audit("Excluiu vendedor","Vendedores",v.nome);toast("Vendedor excluído",v.nome,"warn2");go("vendedores");}});}
+function vdMass(acao){const ids=_selIds("vd");if(!ids.length)return;let ok=0,blk=0;
+  ids.forEach(id=>{const v=DB.vendedores.find(x=>x.id===id);if(!v)return;if(acao==="inativar"){v.ativo=false;ok++;}else if(acao==="reativar"){v.ativo=true;ok++;}else if(acao==="excluir"){if(vinculosVendedor(v).total>0){v.ativo=false;blk++;}else{DB.vendedores=DB.vendedores.filter(x=>x.id!==id);ok++;}}});
+  audit("Ação em massa ("+acao+") vendedores","Vendedores",ids.length+" itens");selClear("vd");
+  toast("Ação concluída",acao==="excluir"?(ok+" excluído(s), "+blk+" com vínculo inativado(s).") :(ok+" vendedor(es) "+(acao==="inativar"?"inativado(s)":"reativado(s)")));go("vendedores");}
+</script>
