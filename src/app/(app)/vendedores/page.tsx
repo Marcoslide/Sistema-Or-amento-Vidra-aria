@@ -1,118 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, UserCog, Percent } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { useToast } from "@/components/ui/toast";
-import { vendedorService } from "@/data/services";
-import type { Vendedor } from "@/lib/types";
+import { CadastroView, type Column, type Field } from "@/components/cadastro/cadastro-view";
 
-const iniciais = (nome: string) =>
-  nome
-    .split(" ")
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+const columns: Column[] = [
+  { key: "nome", label: "Vendedor" },
+  { key: "email", label: "E-mail" },
+  { key: "tel", label: "Telefone" },
+  { key: "desc_max", label: "Desc. máx", align: "right", render: (r) => `${Number(r.desc_max || 0)}%` },
+];
+const fields: Field[] = [
+  { key: "nome", label: "Nome", type: "text", required: true, full: true },
+  { key: "email", label: "E-mail", type: "text" },
+  { key: "tel", label: "Telefone", type: "text" },
+  { key: "desc_max", label: "Limite de desconto (%)", type: "number" },
+  { key: "meta", label: "Meta (R$)", type: "number" },
+  { key: "comissao", label: "Comissão (%)", type: "number" },
+  { key: "ativo", label: "Ativo", type: "checkbox" },
+];
 
 export default function VendedoresPage() {
-  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    vendedorService.listar().then((data) => {
-      setVendedores(data);
-      setLoading(false);
-    });
-  }, []);
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Vendedores"
-        description="Cada vendedor acessa apenas as próprias vendas. Defina o desconto máximo por vendedor."
-      >
-        <Button
-          className="gap-1.5"
-          onClick={() =>
-            toast({
-              variant: "info",
-              title: "Cadastro de vendedor",
-              description: "Formulário disponível na versão completa.",
-            })
-          }
-        >
-          <Plus className="h-4 w-4" />
-          Novo vendedor
-        </Button>
-      </PageHeader>
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-6">Vendedor</TableHead>
-                <TableHead>Contato</TableHead>
-                <TableHead>Desconto máx.</TableHead>
-                <TableHead className="pr-6 text-right">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
-                    Carregando...
-                  </TableCell>
-                </TableRow>
-              ) : (
-                vendedores.map((v) => (
-                  <TableRow key={v.id}>
-                    <TableCell className="pl-6">
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarFallback>{iniciais(v.nome)}</AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium text-foreground">{v.nome}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <p className="text-foreground">{v.email}</p>
-                      <p className="text-xs text-muted-foreground">{v.telefone}</p>
-                    </TableCell>
-                    <TableCell>
-                      <span className="inline-flex items-center gap-1 font-medium">
-                        <Percent className="h-3.5 w-3.5 text-muted-foreground" />
-                        {v.descontoMaximo}%
-                      </span>
-                    </TableCell>
-                    <TableCell className="pr-6 text-right">
-                      {v.ativo ? (
-                        <Badge variant="success">Ativo</Badge>
-                      ) : (
-                        <Badge variant="muted">Inativo</Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+    <CadastroView
+      entity="vendedores" title="Vendedores"
+      description="Cada vendedor vê apenas as próprias vendas. Vendedor com vendas não pode ser excluído — apenas inativado."
+      table="sellers" select="id,nome,email,tel,desc_max,meta,comissao,ativo"
+      columns={columns} fields={fields} searchKeys={["nome", "email", "tel"]}
+      novo={() => ({ nome: "", email: "", tel: "", desc_max: 0, meta: 0, comissao: 0, ativo: true })}
+    />
   );
 }

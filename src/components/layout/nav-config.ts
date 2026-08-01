@@ -7,6 +7,9 @@ import {
   Landmark,
   CreditCard,
   Settings,
+  Store,
+  Tags,
+  Truck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -34,7 +37,10 @@ export const navGroups: NavGroup[] = [
   {
     title: "Cadastros",
     items: [
+      { label: "Lojas e operações", href: "/lojas", icon: Store },
       { label: "Vendedores", href: "/vendedores", icon: UserCog },
+      { label: "Famílias", href: "/familias", icon: Tags },
+      { label: "Fornecedores", href: "/fornecedores", icon: Truck },
       { label: "Contas de Recebimento", href: "/contas", icon: Landmark },
       { label: "Operadoras de Cartão", href: "/operadoras", icon: CreditCard },
     ],

@@ -14,7 +14,9 @@ insert into permissions(key,descricao) values
  ('fin.excluir_contas','Excluir contas'),('fin.excluir_operadoras','Excluir operadoras'),('cad.excluir_vendedores','Excluir vendedores'),
  ('fin.excluir_custos','Excluir custos'),('fin.excluir_mao_obra','Excluir mão de obra'),('fin.excluir_maquinas','Excluir máquinas'),
  ('fin.excluir_bens','Excluir bens'),('fin.excluir_centros_custo','Excluir centros de custo'),
- ('adm.excluir_lojas','Excluir lojas'),('adm.excluir_usuarios','Excluir usuários'),('adm.excluir_perfis','Excluir perfis')
+ ('adm.excluir_lojas','Excluir lojas'),('adm.excluir_usuarios','Excluir usuários'),('adm.excluir_perfis','Excluir perfis'),
+ ('cad.excluir_clientes','Excluir clientes'),('cad.excluir_produtos','Excluir produtos'),
+ ('cad.excluir_fornecedores','Excluir fornecedores'),('cad.excluir_familias','Excluir famílias')
 on conflict (key) do nothing;
 
 -- ---------- Organização + lojas demo (Conceito Glass) ----------

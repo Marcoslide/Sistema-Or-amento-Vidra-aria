@@ -1,87 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Landmark, Wallet, Building } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useToast } from "@/components/ui/toast";
-import { contaService } from "@/data/services";
-import type { ContaRecebimento } from "@/lib/types";
+import { CadastroView, type Column, type Field } from "@/components/cadastro/cadastro-view";
 
-const TIPO_LABEL: Record<ContaRecebimento["tipo"], string> = {
-  BANCO: "Banco",
-  CAIXA: "Caixa",
-  CARTEIRA_DIGITAL: "Carteira digital",
-};
+const TIPOS = ["Caixa", "Conta corrente", "Conta poupança", "Carteira digital", "Conta de recebimento", "Adquirente", "Banco", "Outro"]
+  .map((t) => ({ value: t, label: t }));
+
+const columns: Column[] = [
+  { key: "nome", label: "Conta" },
+  { key: "tipo", label: "Tipo" },
+  { key: "banco", label: "Banco" },
+  { key: "saldo_inicial", label: "Saldo inicial", align: "right", render: (r) => Number(r.saldo_inicial || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) },
+];
+const fields: Field[] = [
+  { key: "nome", label: "Nome da conta", type: "text", required: true, full: true },
+  { key: "tipo", label: "Tipo", type: "select", options: TIPOS },
+  { key: "store_id", label: "Loja / operação", type: "select", optionsFrom: "lojas" },
+  { key: "banco", label: "Banco", type: "text" },
+  { key: "agencia", label: "Agência", type: "text" },
+  { key: "numero", label: "Número da conta", type: "text" },
+  { key: "digito", label: "Dígito", type: "text" },
+  { key: "titular", label: "Titular", type: "text" },
+  { key: "doc", label: "CPF/CNPJ do titular", type: "text" },
+  { key: "saldo_inicial", label: "Saldo inicial", type: "number" },
+  { key: "aceita_entrada", label: "Aceita entradas", type: "checkbox" },
+  { key: "aceita_saida", label: "Aceita saídas", type: "checkbox" },
+  { key: "padrao", label: "Conta padrão", type: "checkbox" },
+  { key: "ativo", label: "Ativa", type: "checkbox" },
+  { key: "obs", label: "Observações", type: "textarea", full: true },
+];
 
 export default function ContasPage() {
-  const [contas, setContas] = useState<ContaRecebimento[]>([]);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    contaService.listar().then(setContas);
-  }, []);
-
-  const icon = (tipo: ContaRecebimento["tipo"]) =>
-    tipo === "CAIXA" ? Wallet : tipo === "BANCO" ? Building : Landmark;
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Contas de Recebimento"
-        description="Contas usadas para receber os pagamentos da empresa."
-      >
-        <Button
-          className="gap-1.5"
-          onClick={() =>
-            toast({
-              variant: "info",
-              title: "Nova conta",
-              description: "Formulário disponível na versão completa.",
-            })
-          }
-        >
-          <Plus className="h-4 w-4" />
-          Nova conta
-        </Button>
-      </PageHeader>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {contas.map((c) => {
-          const Icon = icon(c.tipo);
-          return (
-            <Card key={c.id}>
-              <CardHeader className="flex-row items-center justify-between space-y-0">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">{c.nome}</CardTitle>
-                    <p className="text-xs text-muted-foreground">
-                      {TIPO_LABEL[c.tipo]}
-                    </p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {c.ativo ? (
-                  <Badge variant="success">Ativa</Badge>
-                ) : (
-                  <Badge variant="muted">Inativa</Badge>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
+    <CadastroView
+      entity="contas" title="Contas de Recebimento"
+      description="Contas financeiras. Conta com movimentação não pode ser excluída — apenas inativada. Conta inativa não aparece em novos lançamentos."
+      table="financial_accounts" select="id,nome,tipo,banco,agencia,numero,digito,titular,doc,store_id,saldo_inicial,aceita_entrada,aceita_saida,padrao,obs,ativo"
+      columns={columns} fields={fields} searchKeys={["nome", "banco", "titular"]} lojaFilter
+      novo={() => ({ nome: "", tipo: "Conta corrente", store_id: "", banco: "", agencia: "", numero: "", digito: "", titular: "", doc: "", saldo_inicial: 0, aceita_entrada: true, aceita_saida: true, padrao: false, obs: "", ativo: true })}
+    />
   );
 }

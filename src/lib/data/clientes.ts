@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { hasSupabaseEnv } from "@/lib/supabase/env";
+import { isMock, ConnectionError } from "@/lib/data/mode";
 import { clienteService } from "@/data/services";
 import type { Cliente } from "@/lib/types";
 
@@ -25,16 +25,17 @@ function rowToCliente(r: CustomerRow): Cliente {
   };
 }
 
-// Lista clientes: usa Supabase quando configurado; senão cai no mock (dev/preview sem env).
+// Lista clientes. Em modo Supabase, erro NÃO cai em mock: propaga ConnectionError.
+// Mock só em modo dev declarado (sem variáveis de ambiente).
 export async function listarClientes(): Promise<Cliente[]> {
-  if (!hasSupabaseEnv()) return clienteService.listar();
+  if (isMock()) return clienteService.listar();
   const supabase = createClient();
   const { data, error } = await supabase
     .from("customers")
     .select("id,nome,doc,email,tel,cidade,uf,ativo")
     .eq("ativo", true)
     .order("nome");
-  if (error) throw error;
+  if (error) throw new ConnectionError("Não foi possível carregar os clientes: " + error.message);
   return (data as CustomerRow[]).map(rowToCliente);
 }
 
@@ -51,12 +52,12 @@ async function minhaOrganizacao(): Promise<string | null> {
 export async function criarCliente(input: { nome: string; doc?: string; email?: string; tel?: string; cidade?: string; uf?: string; storeId?: string }) {
   const supabase = createClient();
   const org = await minhaOrganizacao();
-  if (!org) throw new Error("Usuário sem organização vinculada.");
+  if (!org) throw new ConnectionError("Usuário sem organização vinculada.");
   const { error } = await supabase.from("customers").insert({
     organization_id: org,
     store_id: input.storeId || null,
     nome: input.nome, doc: input.doc || null, email: input.email || null,
     tel: input.tel || null, cidade: input.cidade || null, uf: input.uf || null,
   });
-  if (error) throw error;
+  if (error) throw new ConnectionError("Não foi possível salvar o cliente: " + error.message);
 }
