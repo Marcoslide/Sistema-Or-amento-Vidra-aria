@@ -1,0 +1,189 @@
+{
+  "R": [
+    {
+      "id": "A1",
+      "func": "openLojaForm+salvarLoja",
+      "acao": "Criar 'LOJA TESTE AUDITORIA' e salvar como ativa",
+      "esperado": "Registro incluído em DB.lojas com ativo:true",
+      "encontrado": "{\"ok\":true,\"id\":\"loja-77-68229\",\"ativo\":true}",
+      "pass": true
+    },
+    {
+      "id": "A2",
+      "func": "lojasSelecionaveis",
+      "acao": "Verificar fonte dos selects de operação (loja ativa)",
+      "esperado": "Loja nova presente",
+      "encontrado": "presente",
+      "pass": true
+    },
+    {
+      "id": "A3",
+      "func": "VIEWS[orcamento-novo]/mountBuilder",
+      "acao": "Abrir Novo Orçamento e inspecionar o select de Loja",
+      "esperado": "Option da loja nova no DOM",
+      "encontrado": "presente no DOM",
+      "pass": true
+    },
+    {
+      "id": "A4",
+      "func": "cpNovo (#cp-loja)",
+      "acao": "Abrir Nova Conta a Pagar e inspecionar o select de Loja",
+      "esperado": "Option da loja nova no DOM",
+      "encontrado": "presente no DOM",
+      "pass": true
+    },
+    {
+      "id": "A5",
+      "func": "renderLojaSelector (#loja-sel-wrap)",
+      "acao": "Renderizar seletor global do topo",
+      "esperado": "Loja nova no seletor global",
+      "encontrado": "presente no DOM",
+      "pass": true
+    },
+    {
+      "id": "A6",
+      "func": "toggleLoja",
+      "acao": "Inativar a loja nova",
+      "esperado": "ativo === false no registro",
+      "encontrado": "ativo=false",
+      "pass": true
+    },
+    {
+      "id": "A7",
+      "func": "lojasSelecionaveis (pós-inativar)",
+      "acao": "Loja inativa não deve alimentar selects de novos lançamentos",
+      "esperado": "Loja AUSENTE de lojasSelecionaveis()",
+      "encontrado": "ausente",
+      "pass": true
+    },
+    {
+      "id": "A8",
+      "func": "Novo Orçamento (pós-inativar)",
+      "acao": "Select de Loja do novo orçamento não deve listar a inativa",
+      "esperado": "Option AUSENTE no DOM",
+      "encontrado": "ausente",
+      "pass": true
+    },
+    {
+      "id": "A9",
+      "func": "cpNovo (pós-inativar)",
+      "acao": "Select de Loja de Conta a Pagar não deve listar a inativa",
+      "esperado": "Option AUSENTE no DOM",
+      "encontrado": "ausente",
+      "pass": true
+    },
+    {
+      "id": "A10",
+      "func": "buildToOrc/persist (loja inativa)",
+      "acao": "Chamada direta: novo orçamento com loja INATIVA",
+      "esperado": "Sistema BLOQUEIA o lançamento",
+      "encontrado": "bloqueado ",
+      "pass": true
+    },
+    {
+      "id": "A11",
+      "func": "cpSalvar (loja inativa)",
+      "acao": "Chamada direta: nova conta a pagar com loja INATIVA",
+      "esperado": "Sistema BLOQUEIA o lançamento",
+      "encontrado": "bloqueado ",
+      "pass": true
+    },
+    {
+      "id": "A12",
+      "func": "toggleLoja + CURR_LOJA",
+      "acao": "Inativar a loja que está selecionada no topo",
+      "esperado": "CURR_LOJA deixa de apontar para a loja inativa",
+      "encontrado": "CURR_LOJA=",
+      "pass": true
+    },
+    {
+      "id": "A13",
+      "func": "toggleLoja (histórico)",
+      "acao": "Inativar loja com histórico e conferir registros antigos",
+      "esperado": "Registros históricos preservados",
+      "encontrado": "{\"ok\":true,\"antes\":2,\"depois\":2}",
+      "pass": true
+    },
+    {
+      "id": "A14",
+      "func": "VIEWS.configuracoes (aba lojas)",
+      "acao": "Conferir badge de status na tabela de lojas",
+      "esperado": "Loja inativa exibe badge 'Inativa'",
+      "encontrado": "badge Inativa presente",
+      "pass": true
+    },
+    {
+      "id": "A15",
+      "func": "toggleLoja (reativar)",
+      "acao": "Reativar a loja de teste",
+      "esperado": "ativo:true, mesmo id, sem duplicar",
+      "encontrado": "{\"ativo\":true,\"mesmoId\":true,\"semDuplicar\":true}",
+      "pass": true
+    },
+    {
+      "id": "B1",
+      "func": "salvarReceb → orcRecebido",
+      "acao": "Registrar recebimento de R$100 na venda",
+      "esperado": "recebido +100",
+      "encontrado": "antes 800 depois 900",
+      "pass": true
+    },
+    {
+      "id": "B2",
+      "func": "salvarReceb → caixaSaldo",
+      "acao": "Mesmo recebimento reflete no Caixa",
+      "esperado": "caixa +100",
+      "encontrado": "antes 45840 depois 45940",
+      "pass": true
+    },
+    {
+      "id": "B3",
+      "func": "peDados().receita",
+      "acao": "Recebimento propaga ao Ponto de Equilíbrio",
+      "esperado": "PE calcula receita > 0",
+      "encontrado": "receita=49374.94",
+      "pass": true
+    },
+    {
+      "id": "B4",
+      "func": "estorno → caixa/recebido",
+      "acao": "Estornar o recebimento",
+      "esperado": "caixa e recebido voltam pelo mesmo valor",
+      "encontrado": "{\"dCaixa\":100,\"dRec\":100,\"val\":100}",
+      "pass": true
+    },
+    {
+      "id": "C1",
+      "func": "margemVenda + custosExtras",
+      "acao": "Adicionar custo direto de R$250 à venda",
+      "esperado": "lucro cai 250",
+      "encontrado": "{\"antes\":-295.08,\"depois\":-545.08}",
+      "pass": true
+    },
+    {
+      "id": "C2",
+      "func": "custoExtrasVenda (participaMargem:false)",
+      "acao": "Custo marcado para não participar da margem",
+      "esperado": "não entra no custo (=0)",
+      "encontrado": "custoExtras=0",
+      "pass": true
+    },
+    {
+      "id": "D1",
+      "func": "abrirAnaliseVenda (vendedor)",
+      "acao": "Vendedor tenta abrir Análise por Venda por chamada direta",
+      "esperado": "guard bloqueia (não abre detalhe)",
+      "encontrado": "bloqueado",
+      "pass": true
+    },
+    {
+      "id": "D2",
+      "func": "openLojaForm (vendedor)",
+      "acao": "Vendedor tenta abrir cadastro de loja por chamada direta",
+      "esperado": "guard bloqueia (form não abre)",
+      "encontrado": "bloqueado",
+      "pass": true
+    }
+  ],
+  "errors": []
+}

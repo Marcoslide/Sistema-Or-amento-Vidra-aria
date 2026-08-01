@@ -2,18 +2,20 @@
 
 ## 1. Arquivo congelado
 
-| Campo | Valor |
+| Campo | Valor (v2 — pós-auditoria funcional) |
 |------|-------|
 | Arquivo | `legacy/vidrogestor-congelado.html` |
-| Tamanho | 572.622 bytes |
-| Linhas | 4.012 |
-| MD5 | `6e817e4a919c58393d75bfe4ad7259a9` |
-| SHA-256 | `29124a27770c3cf73725e469509cd70e61e2b3584f1bc4758e0b889aa23bc529` |
+| Tamanho | 574.495 bytes |
+| Linhas | 4.024 |
+| MD5 | `ff0ddf50f9accd41d1febec985d1749e` |
+| SHA-256 | `8ff18e1bdde56fbd558343056b46049ce3155f9585a53fd2664ce8c815555057` |
 | Data | 2026-08-01 |
 
-Este é o protótipo **autoritativo** — a versão mais recente e completa, com todas
-as correções aprovadas nos lotes anteriores. Não será revertido nem reconstruído
-do zero. A Fase 2 reaproveita seu comportamento, cálculos, regras e layout.
+> **v1 → v2:** a versão v1 (`md5 6e817e4a…`, 572.622 bytes) passou nas 363 asserções
+> estáticas, mas a **auditoria funcional real** (`docs/fase2/bloco1-auditoria-funcional.md`)
+> revelou 6 falhas em *lojas ativas/inativas*. A v2 corrige essas falhas e é a versão
+> congelada autoritativa. Não será revertida nem reconstruída do zero. A Fase 2
+> reaproveita seu comportamento, cálculos, regras e layout.
 
 Cópia auxiliar `legacy/vidrogestor-standalone.html` (sem `<link rel=manifest>`)
 para abrir por `file://` no celular durante testes.

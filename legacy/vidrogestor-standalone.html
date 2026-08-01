@@ -1826,6 +1826,7 @@ function buildToOrc(status){
   return o;
 }
 function persist(o){
+  if(!o.n){try{validarLojaNovoLancamento(o.lojaId);}catch(e){toast("Operação inválida",e.message,"warn2");return null;}}
   if(o.n){const idx=DB.orcamentos.findIndex(x=>x.n===o.n);if(idx>=0)DB.orcamentos[idx]=o;else DB.orcamentos.push(o);}
   else{o.n=ORC_SEQ++;DB.orcamentos.push(o);B.n=o.n;}
   return o.n;
@@ -1833,7 +1834,7 @@ function persist(o){
 function salvarRascunho(silent){
   if(!B.clienteId&&!silent){/* rascunho pode não ter cliente, mas avisa */}
   const keepStatus=(B.status&&B.status!=="RASCUNHO"&&B.n)?B.status:"RASCUNHO";
-  const o=buildToOrc(keepStatus);const n=persist(o);B.status=o.status;B.dirty=false;
+  const o=buildToOrc(keepStatus);const n=persist(o);if(n==null)return;B.status=o.status;B.dirty=false;
   if(!silent){HL="orc"+n;toast("Rascunho salvo","Orçamento #"+n+" disponível na lista.");go("orcamentos");}
 }
 function gerarOrcamento(){
@@ -1843,7 +1844,7 @@ function gerarOrcamento(){
   const t=calcOrc(B);
   if(!(t.total>0)){toast("Valores inválidos","Confira medidas e preços.","warn2");return;}
   const status=(B.status&&["APROVADO","EM_PRODUCAO","EXECUTANDO","FINALIZADO"].includes(B.status))?B.status:"ORCAMENTO";
-  const o=buildToOrc(status);const n=persist(o);B.status=o.status;B.dirty=false;curOrc=n;
+  const o=buildToOrc(status);const n=persist(o);if(n==null)return;B.status=o.status;B.dirty=false;curOrc=n;
   toast("Orçamento gerado","Orçamento #"+n+" pronto para envio.");go("pdf");
 }
 </script>
@@ -2684,6 +2685,7 @@ function _addMesesBR(br,m){const dt=parseBR(br);if(!dt)return br;const day=dt.ge
 function _diaUtil(br){const dt=parseBR(br);if(!dt)return br;const w=dt.getDay();if(w===6)dt.setDate(dt.getDate()+2);else if(w===0)dt.setDate(dt.getDate()+1);return fmtBR(dt);}
 function cpVencimentoSerie(base,ocor,i,intervalo){switch(ocor){case "Diária":return _addDiasBR(base,i);case "Semanal":return _addDiasBR(base,7*i);case "Quinzenal":return _addDiasBR(base,15*i);case "Mensal":case "Parcelada":return _addMesesBR(base,i);case "Bimestral":return _addMesesBR(base,2*i);case "Trimestral":return _addMesesBR(base,3*i);case "Semestral":return _addMesesBR(base,6*i);case "Anual":return _addMesesBR(base,12*i);case "Personalizada":return _addDiasBR(base,(intervalo||30)*i);default:return base;}}
 function cpSalvar(baixar){const dados=cpColeta();if(!dados)return;
+  if(!curCP){try{validarLojaNovoLancamento(dados.lojaId);}catch(e){const el=document.getElementById("cp-err");if(el)el.textContent=e.message;else toast("Operação inválida",e.message,"warn2");return;}}
   const serie=dados.ocorrencia!=="Única";
   if(!curCP&&serie){const qtd=Math.max(1,Math.min(60,num0(dados.recQtd)||12));const recorrenciaId=uid("rec");const criadas=[];
     for(let i=0;i<qtd;i++){let venc=cpVencimentoSerie(dados.vencimento,dados.ocorrencia,i,dados.recInt);if(dados.recDiaUtil)venc=_diaUtil(venc);
@@ -2836,7 +2838,9 @@ function salvarLoja(id){const g=k=>document.getElementById("lj-"+k).value.trim()
   if(id){Object.assign(DB.lojas.find(x=>x.id===id),data);toast("Loja atualizada",nome);}
   else{data.id=uid("loja");data.ativo=true;DB.lojas.push(data);toast("Loja criada",nome);}
   if(typeof audit==="function")audit(id?"Editou loja":"Criou loja","Lojas",nome);closeModal();go("configuracoes");}
-function toggleLoja(id){const l=DB.lojas.find(x=>x.id===id);if(!l)return;l.ativo=l.ativo===false;if(typeof audit==="function")audit(l.ativo?"Reativou loja":"Inativou loja","Lojas",l.nome);toast("Loja "+(l.ativo?"reativada":"inativada"),l.nome,l.ativo?"ok":"warn2");go("configuracoes");}
+function toggleLoja(id){const l=DB.lojas.find(x=>x.id===id);if(!l)return;l.ativo=l.ativo===false;
+  if(!l.ativo&&typeof CURR_LOJA!=="undefined"&&CURR_LOJA===id){const perm=(typeof lojasAtivasPermitidas==="function")?lojasAtivasPermitidas():[];CURR_LOJA=((typeof isMultiloja==="function"&&isMultiloja())||perm.length!==1)?"":(perm[0]?perm[0].id:"");if(typeof renderLojaSelector==="function")renderLojaSelector();}
+  if(typeof audit==="function")audit(l.ativo?"Reativou loja":"Inativou loja","Lojas",l.nome);toast("Loja "+(l.ativo?"reativada":"inativada"),l.nome,l.ativo?"ok":"warn2");go("configuracoes");}
 /* ===== CRUD Usuários (multiusuário) ===== */
 function openUsuarioForm(id){if(typeof can==="function"&&!can("adm.config")&&!can("adm.usuarios")){toast("Sem permissão","Apenas administrador edita usuários.","warn2");return;}
   const u=id?DB.usuarios.find(x=>x.id===id):{id:"",nome:"",email:"",perfil:"vendedor",lojas:[],status:"PENDENTE_APROVACAO",ultimo:"—",vendedorId:""};
@@ -3154,7 +3158,15 @@ function orcVisiveis(){return DB.orcamentos.filter(o=>podeVerOrc(o));}
 function obraVisivel(ob){if(!ob)return false;const o=DB.orcByN(ob.n);if(o)return podeVerOrc(o);return lojaPermitida(ob.lojaId);}
 function cpVisivel(c){if(!can("fin.contas_pagar"))return false;return lojaPermitida(c.lojaId);}
 /* seletor global de operação */
-function lojasSelecionaveis(){const u=CURR_USER;const arr=scopeLojas(u).map(id=>({id,nome:(DB.lojas.find(l=>l.id===id)||{}).nome||id}));return arr;}
+/* ===== Lojas ativas/inativas — fonte única para novos lançamentos ===== */
+function lojasAtivas(){return DB.lojas.filter(l=>l.ativo!==false);}
+function usuarioPodeAcessarLoja(u,id){u=u||CURR_USER;if(!id)return false;return scopeLojas(u).includes(id);}
+function lojasAtivasPermitidas(u){u=u||CURR_USER;return lojasAtivas().filter(l=>usuarioPodeAcessarLoja(u,l.id));}
+function validarLojaNovoLancamento(lojaId){const loja=DB.lojas.find(l=>l.id===lojaId);if(!loja)throw new Error("Operação não encontrada.");if(loja.ativo===false)throw new Error("Esta operação está inativa e não pode receber novos lançamentos.");if(!usuarioPodeAcessarLoja(CURR_USER,lojaId))throw new Error("Usuário sem acesso a esta operação.");return loja;}
+/* Selects e filtros de NOVOS lançamentos usam apenas lojas ativas e permitidas.
+   A visibilidade de histórico continua por scopeLojas (inclui inativas), preservando registros antigos. */
+function lojasSelecionaveis(){const u=CURR_USER;return scopeLojas(u).filter(id=>{const l=DB.lojas.find(x=>x.id===id);return l&&l.ativo!==false;}).map(id=>({id,nome:(DB.lojas.find(l=>l.id===id)||{}).nome||id}));}
+function lojasVisiveisHistorico(){const u=CURR_USER;return scopeLojas(u).map(id=>({id,nome:(DB.lojas.find(l=>l.id===id)||{}).nome||id,ativo:((DB.lojas.find(l=>l.id===id)||{}).ativo!==false)}));}
 function renderLojaSelector(){const wrap=document.getElementById("loja-sel-wrap");if(!wrap||typeof CURR_USER==="undefined")return;const ls=lojasSelecionaveis();const multi=isMultiloja();
   if(ls.length<=1&&!multi){wrap.innerHTML=`<span class="subtle" style="font-size:12px">${ls[0]?ls[0].nome:"—"}</span>`;if(ls[0]&&CURR_LOJA&&CURR_LOJA!==ls[0].id)CURR_LOJA=ls[0].id;return;}
   wrap.innerHTML=`<span class="subtle" style="font-size:11px">Operação</span><select class="inp" style="height:34px;width:190px;font-size:13px" onchange="setLoja(this.value)">${multi?`<option value="" ${CURR_LOJA===""?"selected":""}>Todas as operações</option>`:""}${ls.map(l=>`<option value="${l.id}" ${CURR_LOJA===l.id?"selected":""}>${esc(l.nome)}</option>`).join("")}</select>`;}
