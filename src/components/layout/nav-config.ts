@@ -10,6 +10,7 @@ import {
   Store,
   Tags,
   Truck,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -47,6 +48,10 @@ export const navGroups: NavGroup[] = [
   },
   {
     title: "Sistema",
-    items: [{ label: "Configurações", href: "/configuracoes", icon: Settings }],
+    items: [
+      { label: "Usuários", href: "/usuarios", icon: Users },
+      { label: "Perfis e permissões", href: "/perfis", icon: ShieldCheck },
+      { label: "Configurações", href: "/configuracoes", icon: Settings },
+    ],
   },
 ];
