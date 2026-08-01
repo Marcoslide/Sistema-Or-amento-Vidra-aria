@@ -1,325 +1,137 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import {
-  ArrowLeft,
-  FileText,
-  Printer,
-  Check,
-  User,
-  MapPin,
-  Layers,
-  Pencil,
-} from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Printer, ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { useToast } from "@/components/ui/toast";
-import { orcamentoService } from "@/data/services";
-import { totalPagamentos } from "@/lib/calculations";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
-import {
-  FORMA_PAGAMENTO_LABEL,
-  STATUS_ORCAMENTO_LABEL,
-  type Orcamento,
-  type StatusOrcamento,
-} from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { OrcamentoBuilder } from "@/components/comercial/orcamento-builder";
+import { TransformarModal } from "@/components/comercial/transformar-modal";
+import { getVenda, getHistorico, type VendaFull, type HistoricoRow } from "@/lib/data/vendas-core";
+import { mudarSituacao } from "@/lib/data/vendas-actions";
+import { labelSituacao, variantSituacao, SITUACAO_PROXIMAS } from "@/lib/commercial/situacao";
+import { formatCurrency, formatDate } from "@/lib/format";
 
-const FLUXO: StatusOrcamento[] = [
-  "ORCAMENTO",
-  "APROVADO",
-  "EM_PRODUCAO",
-  "EXECUTANDO",
-  "FINALIZADO",
-];
-
-export default function OrcamentoDetalhePage() {
+export default function VendaPage() {
   const params = useParams<{ id: string }>();
-  const { toast } = useToast();
-  const [orc, setOrc] = useState<Orcamento | null>(null);
+  const router = useRouter();
+  const search = useSearchParams();
+  const [venda, setVenda] = useState<VendaFull | null>(null);
+  const [hist, setHist] = useState<HistoricoRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState("");
+  const [msg, setMsg] = useState("");
+  const [modal, setModal] = useState(false);
 
-  useEffect(() => {
-    orcamentoService.obter(params.id).then((data) => {
-      setOrc(data);
-      setLoading(false);
-    });
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const v = await getVenda(params.id);
+      if (!v) { setErro("Registro não encontrado."); setVenda(null); return; }
+      setVenda(v); setErro("");
+      setHist(await getHistorico(params.id));
+    } catch (e) { setErro((e as Error).message); }
+    finally { setLoading(false); }
   }, [params.id]);
 
-  if (loading) {
-    return <p className="text-muted-foreground">Carregando orçamento...</p>;
-  }
-  if (!orc) {
-    return (
-      <div className="space-y-4">
-        <p className="text-muted-foreground">Orçamento não encontrado.</p>
-        <Button asChild variant="outline">
-          <Link href="/orcamentos">Voltar</Link>
-        </Button>
-      </div>
-    );
+  useEffect(() => { carregar(); }, [carregar]);
+  // atalho vindo do builder: abrir modal de transformação automaticamente
+  useEffect(() => {
+    if (venda && !venda.venda_gerada && search.get("venda") === "1") setModal(true);
+  }, [venda, search]);
+
+  async function avancar(nova: string) {
+    setMsg(""); setErro("");
+    const res = await mudarSituacao(params.id, nova);
+    if (res.ok) { setMsg("Situação atualizada."); carregar(); }
+    else setErro(res.error || "Falha ao atualizar situação.");
   }
 
-  const pago = totalPagamentos(orc);
-  const saldo = orc.total - pago;
-  const etapaAtual = FLUXO.indexOf(orc.status);
+  if (loading) return <div className="py-10 text-center text-muted-foreground">Carregando...</div>;
+  if (!venda) return (
+    <div className="space-y-4">
+      {erro && <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">{erro}</div>}
+      <Button variant="outline" onClick={() => router.push("/orcamentos")}>Voltar</Button>
+    </div>
+  );
+
+  const proximas = SITUACAO_PROXIMAS[venda.situacao] || [];
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Button asChild variant="ghost" size="icon">
-            <Link href="/orcamentos">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Orçamento #{orc.numero}
-              </h1>
-              <StatusBadge status={orc.status} />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Criado em {formatDate(orc.criadoEm)} • {orc.vendedorNome}
-            </p>
-          </div>
+      {(erro || msg) && (
+        <div className={`rounded-lg border px-4 py-3 text-sm ${erro ? "border-destructive/40 bg-destructive/5 text-destructive" : "border-emerald-400/40 bg-emerald-50 text-emerald-700"}`}>
+          {erro || msg}
         </div>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" className="gap-1.5">
-            <Link href={`/orcamentos/${orc.id}/pdf`}>
-              <Printer className="h-4 w-4" />
-              Ver PDF
-            </Link>
-          </Button>
-          <Button
-            className="gap-1.5"
-            onClick={() =>
-              toast({
-                variant: "success",
-                title: "Status avançado",
-                description: "A obra avançou de etapa (simulado).",
-              })
-            }
-          >
-            <Check className="h-4 w-4" />
-            Avançar etapa
-          </Button>
-        </div>
-      </div>
+      )}
 
-      {/* Linha do tempo do fluxo */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            {FLUXO.map((etapa, i) => {
-              const done = etapaAtual >= 0 && i <= etapaAtual;
-              const current = i === etapaAtual;
-              return (
-                <div
-                  key={etapa}
-                  className="flex flex-1 items-center gap-3 sm:flex-col sm:gap-2 sm:text-center"
-                >
-                  <div
-                    className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold",
-                      done
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-background text-muted-foreground",
-                      current && "ring-4 ring-primary/15",
-                    )}
-                  >
-                    {done ? <Check className="h-4 w-4" /> : i + 1}
-                  </div>
-                  <span
-                    className={cn(
-                      "text-xs font-medium",
-                      done ? "text-foreground" : "text-muted-foreground",
-                    )}
-                  >
-                    {STATUS_ORCAMENTO_LABEL[etapa]}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          {["RETORNO", "RECLAMACAO", "CANCELADO"].includes(orc.status) && (
-            <div className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-              Este orçamento está marcado como{" "}
-              <strong>{STATUS_ORCAMENTO_LABEL[orc.status]}</strong>.
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          {/* Ambientes e itens */}
-          {orc.ambientes.map((amb) => (
-            <Card key={amb.id}>
-              <CardHeader className="flex-row items-center gap-2 space-y-0">
-                <Layers className="h-4 w-4 text-primary" />
-                <CardTitle className="text-base">{amb.nome}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {amb.itens.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-start justify-between gap-4 rounded-lg border p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground">
-                        {item.produtoNome}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {item.medidas
-                          .map(
-                            (m) =>
-                              `${m.quantidade}× ${formatNumber(m.largura)}×${formatNumber(
-                                m.altura,
-                              )}m`,
-                          )
-                          .join("  •  ")}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatNumber(item.quantidadeTotal)}{" "}
-                        {item.unidade === "M2"
-                          ? "m²"
-                          : item.unidade === "UNIDADE"
-                            ? "un"
-                            : "m"}{" "}
-                        × {formatCurrency(item.precoUnitario)}
-                      </p>
-                    </div>
-                    <p className="shrink-0 font-semibold">
-                      {formatCurrency(item.total)}
-                    </p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ))}
-
-          {/* Pagamentos */}
+      {/* painel de situação + ações da venda confirmada */}
+      {venda.venda_gerada && (
+        <>
+          <PageHeader title={`Venda #${venda.numero ?? ""}`} description={`${venda.cliente_nome} — ${formatCurrency(venda.total)}`}>
+            <Button asChild variant="outline" className="gap-1.5"><Link href={`/orcamentos/${venda.id}/pdf`}><Printer className="h-4 w-4" /> PDF</Link></Button>
+          </PageHeader>
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Pagamentos</CardTitle>
-              <CardDescription>Formas e condições registradas.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {orc.pagamentos.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nenhum pagamento registrado.
-                </p>
-              ) : (
-                orc.pagamentos.map((p) => (
-                  <div
-                    key={p.id}
-                    className="flex items-center justify-between rounded-lg border p-3"
-                  >
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {FORMA_PAGAMENTO_LABEL[p.forma]}
-                        {p.parcelas > 1 && ` — ${p.parcelas}x`}
-                      </p>
-                      {p.observacao && (
-                        <p className="text-xs text-muted-foreground">
-                          {p.observacao}
-                        </p>
-                      )}
-                    </div>
-                    <p className="font-semibold">{formatCurrency(p.valor)}</p>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Coluna lateral: cliente + resumo */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Cliente & Obra</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-start gap-2">
-                <User className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                <div>
-                  <p className="font-medium text-foreground">{orc.clienteNome}</p>
-                </div>
+            <CardContent className="flex flex-wrap items-center gap-4 p-5">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Situação:</span>
+                <Badge variant={variantSituacao(venda.situacao)}>{labelSituacao(venda.situacao)}</Badge>
               </div>
-              {orc.obraNome && (
-                <div className="flex items-start gap-2">
-                  <MapPin className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">{orc.obraNome}</p>
+              {proximas.length > 0 && (
+                <div className="ml-auto flex flex-wrap gap-2">
+                  {proximas.map((p) => (
+                    <Button key={p} size="sm" variant={p === "CANCELADO" ? "outline" : "default"} className="gap-1"
+                      onClick={() => { if (p !== "CANCELADO" || confirm("Cancelar esta venda?")) avancar(p); }}>
+                      {p !== "CANCELADO" && <ArrowRight className="h-3.5 w-3.5" />} {labelSituacao(p)}
+                    </Button>
+                  ))}
                 </div>
               )}
             </CardContent>
           </Card>
+        </>
+      )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Resumo financeiro</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCurrency(orc.subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  Desconto ({formatNumber(orc.descontoPercentual, 0)}%)
-                </span>
-                <span className="text-destructive">
-                  − {formatCurrency(orc.descontoValor)}
-                </span>
-              </div>
-              <Separator />
-              <div className="flex justify-between text-base font-semibold">
-                <span>Total</span>
-                <span>{formatCurrency(orc.total)}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Pago</span>
-                <span className="text-success">{formatCurrency(pago)}</span>
-              </div>
-              <div className="flex justify-between font-medium">
-                <span className="text-muted-foreground">Saldo</span>
-                <span>{formatCurrency(saldo)}</span>
-              </div>
-            </CardContent>
-          </Card>
+      {/* orçamento: transformar em venda */}
+      {!venda.venda_gerada && venda.situacao !== "CANCELADO" && (
+        <Card className="border-primary/30">
+          <CardContent className="flex flex-wrap items-center gap-4 p-5">
+            <div>
+              <p className="text-sm text-muted-foreground">Este registro é um orçamento.</p>
+              <p className="text-lg font-semibold">{formatCurrency(venda.total)}</p>
+            </div>
+            <Button className="ml-auto" onClick={() => setModal(true)}>Transformar em venda</Button>
+          </CardContent>
+        </Card>
+      )}
 
-          {orc.observacoes && (
-            <Card className="bg-muted/40">
-              <CardContent className="p-5 text-sm">
-                <p className="mb-1 font-medium text-foreground">Observações</p>
-                <p className="text-muted-foreground">{orc.observacoes}</p>
-              </CardContent>
-            </Card>
-          )}
+      {/* corpo: builder (editável se orçamento, somente leitura se venda) */}
+      <OrcamentoBuilder inicial={venda} />
 
-          <Button asChild variant="outline" className="w-full gap-1.5">
-            <Link href="/orcamentos/novo">
-              <Pencil className="h-4 w-4" />
-              Editar orçamento
-            </Link>
-          </Button>
-        </div>
-      </div>
+      {/* histórico */}
+      {hist.length > 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <h3 className="mb-3 text-sm font-semibold">Histórico</h3>
+            <ul className="space-y-2 text-sm">
+              {hist.map((h) => (
+                <li key={h.id} className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                  <span className="text-xs">{formatDate(h.created_at)}</span>
+                  <span className="font-medium text-foreground">{h.campo}</span>
+                  <span>{labelSituacao(h.de)} → {labelSituacao(h.para)}</span>
+                  {h.obs && <span className="italic">· {h.obs}</span>}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      <TransformarModal open={modal} onClose={() => setModal(false)} saleId={venda.id} total={venda.total}
+        onDone={() => { setModal(false); setMsg("Venda gerada com sucesso."); carregar(); router.replace(`/orcamentos/${venda.id}`); }} />
     </div>
   );
 }

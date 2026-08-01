@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:calc": "node --test --experimental-strip-types tests/commercial/calc.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.1",
