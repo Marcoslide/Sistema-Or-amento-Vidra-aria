@@ -297,6 +297,54 @@ const ev = (p, fn, a) => p.evaluate(fn, a);
   rec("E3", "addCaixa (conta a pagar)", "Pagamento de conta a pagar usa a loja da conta",
     "movimento na loja L2 da conta", JSON.stringify(e3), e3.ok);
 
+  // ============ GRUPO F — DADOS DA EMPRESA NOS PDFs + DESCRIÇÃO CP ============
+  await ev(page, () => { CURR_USER = DB.usuarios.find(u => u.perfil === "admin"); CURR_LOJA = ""; });
+  // F1 — endereço completo aparece no cabeçalho central (helper enderecoEmpresaTexto)
+  const f1 = await ev(page, () => {
+    const e = DB.config.empresa;
+    e.logradouro = "Rua Exemplo"; e.numero = "150"; e.complemento = "Galpão 2"; e.bairro = "Mantiqueira"; e.cidade = "Belo Horizonte"; e.uf = "MG"; e.cep = "31000-000";
+    const linhas = enderecoEmpresaTexto(e);
+    return { linhas, ok: linhas.some(l => /Rua Exemplo, 150/.test(l)) && linhas.some(l => /Belo Horizonte\/MG/.test(l)) && linhas.some(l => /CEP: 31000-000/.test(l)) };
+  });
+  rec("F1", "enderecoEmpresaTexto", "Endereço completo em linhas organizadas", "linhas com logradouro/nº, cidade/UF, CEP", JSON.stringify(f1.linhas), f1.ok);
+  // F2 — sem pontuação sobrando quando complemento vazio
+  const f2 = await ev(page, () => { const e = Object.assign({}, DB.config.empresa, { complemento: "" }); const l = enderecoEmpresaTexto(e); return l.join(" | "); });
+  rec("F2", "enderecoEmpresaTexto (complemento vazio)", "Sem hífen/vírgula sobrando", "linha do bairro sem '— '", f2, !/—\s*$|^\s*—|\|\s*—\s*Mantiqueira/.test(f2) && /Mantiqueira/.test(f2));
+  // F3 — cabeçalho do PDF renderiza endereço, WhatsApp e e-mail
+  const f3 = await ev(page, () => {
+    const e = DB.config.empresa; e.whats = "(31) 90000-0000"; e.email = "contato@conceito.com"; e.tel = "(31) 3000-0000";
+    const o = DB.orcamentos[0]; const h = pdfHead(o, "ORÇAMENTO");
+    return { end: /Rua Exemplo, 150/.test(h), whats: /WhatsApp/.test(h), email: /contato@conceito\.com/.test(h), cnpj: /CNPJ/.test(h) };
+  });
+  rec("F3", "pdfHead", "Cabeçalho central com endereço, WhatsApp, e-mail e CNPJ", "todos presentes", JSON.stringify(f3), f3.end && f3.whats && f3.email && f3.cnpj);
+  // F4 — rodapé presente e não repete o endereço completo
+  const f4 = await ev(page, () => { const o = DB.orcamentos[0]; const f = pdfFooter(o, "Orçamento"); return { temCnpj: /CNPJ/.test(f), semEndereco: !/Rua Exemplo, 150/.test(f), temDoc: /Orçamento/.test(f) }; });
+  rec("F4", "pdfFooter", "Rodapé com empresa/CNPJ/doc, sem repetir endereço", "cnpj+doc presentes, endereço ausente", JSON.stringify(f4), f4.temCnpj && f4.semEndereco && f4.temDoc);
+  // F5 — validação bloqueia contrato com dados de empresa incompletos
+  const f5 = await ev(page, () => { const bak = DB.config.empresa.cnpj; DB.config.empresa.cnpj = ""; const miss = validarDadosEmpresa(); DB.config.empresa.cnpj = bak; return miss.some(m => /CNPJ/.test(m)); });
+  rec("F5", "validarDadosEmpresa", "Validação acusa CNPJ ausente", "lista inclui CNPJ", String(f5), f5);
+  // F6 — CP: descrição obrigatória, fornecedor opcional
+  const f6 = await ev(page, () => {
+    cpNovo(); document.getElementById("cp-desc").value = ""; document.getElementById("cp-valor").value = "100"; document.getElementById("cp-venc").value = "2026-12-01";
+    const antes = DB.contasPagar.length; cpSalvar(false); const bloqSemDesc = DB.contasPagar.length === antes;
+    document.getElementById("cp-desc").value = "Aluguel"; document.getElementById("cp-forn").value = ""; cpSalvar(false);
+    const criouSemForn = DB.contasPagar.length === antes + 1;
+    const ult = DB.contasPagar[DB.contasPagar.length - 1];
+    if (typeof closeModal === "function") closeModal();
+    return { bloqSemDesc, criouSemForn, desc: ult.descricao, forn: ult.fornecedor };
+  });
+  rec("F6", "cpColeta/cpSalvar", "CP exige descrição; fornecedor opcional", "bloqueia sem descrição; salva sem fornecedor", JSON.stringify(f6), f6.bloqSemDesc && f6.criouSemForn && f6.desc === "Aluguel" && !f6.forn);
+  // F7 — busca de CP encontra por descrição e por fornecedor
+  const f7 = await ev(page, () => {
+    const c = { id: "cpF7", descricao: "Aluguel galpão", fornecedor: "BH Imóveis", valor: 900, emissao: hojeBR(), competencia: hojeBR(), vencimento: hojeBR(), lojaId: "L1", forma: "PIX", categoria: "Sem categoria", pagamentos: [], anexos: [] };
+    DB.contasPagar.push(c);
+    fCP.q = "Aluguel galpão"; const porDesc = VIEW_contasPagar().includes("Aluguel galpão");
+    fCP.q = "BH Imóveis"; const porForn = VIEW_contasPagar().includes("Aluguel galpão");
+    fCP.q = ""; DB.contasPagar = DB.contasPagar.filter(x => x.id !== "cpF7");
+    return { porDesc, porForn };
+  });
+  rec("F7", "cpFiltradas (busca)", "Busca localiza por descrição e por fornecedor", "ambos verdadeiros", JSON.stringify(f7), f7.porDesc && f7.porForn);
+
   // ============ SAÍDA ============
   console.log("=== ERROS JS ===");
   console.log(errors.length ? errors.slice(0, 12).join("\n") : "NENHUM");

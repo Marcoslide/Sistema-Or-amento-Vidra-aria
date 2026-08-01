@@ -1263,7 +1263,29 @@ function setPdfMode(n,m){const o=DB.orcByN(n);o.pdfMode=m;go("pdf");}
 function duplicarOrc(n){const o=DB.orcByN(n);const c=JSON.parse(JSON.stringify(o));c.n=ORC_SEQ++;c.status="ORCAMENTO";c.vendaGerada=false;c.recebimentos=[];c.parcelas=[];c.criado=hojeBR();c.hist=[{d:hojeBR(),por:"Carla Mendes",acao:"Duplicado do #"+n}];c.ambientes.forEach(a=>{a.id=uid("a");a.itens.forEach(i=>{i.id=uid("i");i.medidas.forEach(m=>m.id=uid("m"))})});DB.orcamentos.push(c);HL="orc"+c.n;toast("Orçamento duplicado","Novo #"+c.n);openOrc(c.n);}
 
 /* ---------- PDF (duas vias: cliente e ordem de produção) ---------- */
-const pdfHead=(o,titulo)=>{const e=DB.config.empresa;const contato=[e.tel,e.email].filter(Boolean).join(" • ");const marca=e.logo?`<img src="${e.logo}" alt="" style="height:56px;max-width:240px;object-fit:contain">`:`<div style="width:44px;height:44px;border-radius:9px;background:var(--primary);display:flex;align-items:center;justify-content:center">${svg("grid",22).replace(/currentColor/g,'#fff')}</div>`;return `<div style="display:flex;justify-content:space-between;border-bottom:1px solid #e2e8f0;padding-bottom:20px"><div style="display:flex;gap:12px;align-items:center">${marca}<div>${e.logo?"":`<b style="font-size:15px;color:#0f172a">${esc(e.fantasia||e.razao||"—")}</b>`}${e.cnpj?`<div class="muted" style="font-size:11px">CNPJ ${esc(e.cnpj)}</div>`:""}${contato?`<div class="muted" style="font-size:11px">${esc(contato)}</div>`:""}</div></div><div style="text-align:right"><b style="font-size:17px;color:#0f172a">${titulo}</b><div style="color:var(--primary);font-weight:600">Nº ${o.n}</div><div class="muted" style="font-size:11px;margin-top:4px">Emissão: ${o.criado}</div><div class="muted" style="font-size:11px">Validade: ${num0(o.validade)} dias</div></div></div>`;};
+/* endereço completo da empresa em linhas limpas (sem pontuação sobrando) */
+function enderecoEmpresaTexto(e){e=e||{};
+  const l1=[e.logradouro,e.numero].filter(Boolean).join(", ");
+  const l2=[e.complemento,e.bairro].filter(Boolean).join(" — ");
+  const l3=[e.cidade,e.uf].filter(Boolean).join("/");
+  const linhas=[l1,l2,l3,e.cep?("CEP: "+e.cep):""].filter(Boolean);
+  if(!linhas.length&&e.endereco)return [e.endereco];
+  return linhas;}
+/* fonte de identidade do documento: dados da loja quando houver bloco fiscal completo, senão a empresa (nunca mistura campos) */
+function empresaDoc(o){const emp=DB.config.empresa;try{if(o&&o.lojaId){const l=DB.lojas.find(x=>x.id===o.lojaId);if(l&&l.fiscal&&l.fiscal.cnpj)return Object.assign({},emp,l.fiscal);}}catch(e){}return emp;}
+/* cabeçalho central de todos os documentos */
+const pdfHead=(o,titulo)=>{const e=empresaDoc(o);
+  const marca=e.logo?`<img src="${e.logo}" alt="" style="height:56px;max-width:240px;object-fit:contain">`:`<div style="width:44px;height:44px;border-radius:9px;background:var(--primary);display:flex;align-items:center;justify-content:center">${svg("grid",22).replace(/currentColor/g,'#fff')}</div>`;
+  const endLinhas=enderecoEmpresaTexto(e).map(l=>`<div class="muted" style="font-size:11px">${esc(l)}</div>`).join("");
+  const contatos=[e.tel?"Telefone: "+e.tel:"",e.whats?"WhatsApp: "+e.whats:"",e.email||"",e.site||""].filter(Boolean).map(l=>`<div class="muted" style="font-size:11px">${esc(l)}</div>`).join("");
+  const nomeBloco=`<b style="font-size:15px;color:#0f172a">${esc(e.fantasia||e.razao||"—")}</b>${(e.razao&&e.razao!==e.fantasia)?`<div class="muted" style="font-size:11px">${esc(e.razao)}</div>`:""}${e.cnpj?`<div class="muted" style="font-size:11px">CNPJ ${esc(e.cnpj)}</div>`:""}${e.ie?`<div class="muted" style="font-size:11px">IE ${esc(e.ie)}</div>`:""}`;
+  return `<div style="display:flex;justify-content:space-between;border-bottom:1px solid #e2e8f0;padding-bottom:20px;gap:16px"><div style="display:flex;gap:12px;align-items:flex-start">${marca}<div>${nomeBloco}<div style="margin-top:3px">${endLinhas}</div><div style="margin-top:3px">${contatos}</div></div></div><div style="text-align:right;white-space:nowrap"><b style="font-size:17px;color:#0f172a">${titulo}</b><div style="color:var(--primary);font-weight:600">Nº ${o.n}</div><div class="muted" style="font-size:11px;margin-top:4px">Emissão: ${o.criado||hojeBR()}</div><div class="muted" style="font-size:11px">Validade: ${num0(o.validade)} dias</div></div></div>`;};
+/* rodapé institucional discreto (não repete o endereço completo do cabeçalho) */
+function pdfFooter(o,tipoDoc){const e=empresaDoc(o);
+  const l1=[e.fantasia||e.razao,e.cnpj?"CNPJ "+e.cnpj:""].filter(Boolean).join(" — ");
+  const l2=[e.tel,e.email].filter(Boolean).join(" | ");
+  const docId=[tipoDoc,(o&&o.n?"nº "+o.n:"")].filter(Boolean).join(" ");
+  return `<div style="margin-top:26px;border-top:1px solid #e2e8f0;padding-top:12px;text-align:center;font-size:10px;color:#94a3b8">${esc(l1)}${l2?"<br>"+esc(l2):""}${docId?"<br>"+esc(docId):""}${e.rodape?"<br>"+esc(e.rodape):""}</div>`;}
 VIEWS.pdf=()=>{
   const o=DB.orcByN(curOrc);if(!o)return ph("Não encontrado");
   const tipo=["producao","contrato","termo"].includes(o.pdfTipo)?o.pdfTipo:"cliente";
@@ -1287,7 +1309,7 @@ function pdfCliente(o){const t=calcOrc(o);const titulo=o.vendaGerada?"PEDIDO / V
     <div style="margin-top:26px"><div class="muted" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Condições de pagamento</div>${o.condicao||o.vendaGerada?(()=>{let rows="";if(o.condicao)rows+=`<div style="display:flex;justify-content:space-between;font-size:11.5px;color:#475569;padding:2px 0"><span>${COND_TIPOS[o.condicao.tipo]}${o.condicao.formas.length?" — "+o.condicao.formas.map(f=>FORMAS[f]).join(", "):""}</span><span></span></div>`;if(ent>0.01)rows+=`<div style="display:flex;justify-content:space-between;font-size:11.5px;color:#475569;padding:2px 0"><span>${entLabel}</span><span class="tnum">${money(ent)}</span></div>`;if(saldo>0.01)rows+=`<div style="display:flex;justify-content:space-between;font-size:11.5px;color:#475569;padding:2px 0"><span>Saldo a pagar (valor restante)</span><span class="tnum">${money(saldo)}</span></div>`;return rows||'<span class="muted" style="font-size:11.5px">A combinar.</span>';})():'<span class="muted" style="font-size:11.5px">A combinar.</span>'}<div class="muted" style="font-size:10px;margin-top:6px">${o.vendaGerada?"Pedido confirmado.":"Proposta comercial — não representa valores recebidos."}</div></div>
     <div style="margin-top:18px"><div class="muted" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Previsão de entrega</div><b style="font-size:12px;color:#0f172a">${prevEntregaTxt(o)}</b>${o.entrega&&o.entrega.obs?`<div class="muted" style="font-size:11px">${esc(o.entrega.obs)}</div>`:""}</div>
     ${o.obs?`<div style="margin-top:20px;background:#f8fafc;border-radius:8px;padding:14px"><div class="muted" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Observações</div><p style="font-size:11.5px;color:#475569">${esc(o.obs)}</p></div>`:""}
-    <div style="margin-top:34px;border-top:1px solid #e2e8f0;padding-top:14px;text-align:center;font-size:10.5px;color:#94a3b8">${esc([DB.config.empresa.endereco,DB.config.empresa.rodape].filter(Boolean).join(" — "))}</div>
+    ${pdfFooter(o,o.vendaGerada?"Pedido":"Orçamento")}
   </div>`;
 }
 function pdfProducao(o){const cliCad=DB.cliById(o.clienteId);const end=(cliCad&&cliCad.obras.find(x=>x.nome===o.obraNome));const p=o.producao;
@@ -1299,7 +1321,8 @@ function pdfProducao(o){const cliCad=DB.cliById(o.clienteId);const end=(cliCad&&
     ${o.obs?`<div style="margin-top:18px;background:#f8fafc;border-radius:8px;padding:14px"><div class="muted" style="font-size:10.5px;text-transform:uppercase;margin-bottom:4px">Observações técnicas / instruções</div><p style="font-size:11.5px;color:#475569">${esc(o.obs)}</p></div>`:""}
     ${o.obsInterna?`<div style="margin-top:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:14px"><div style="font-size:10.5px;text-transform:uppercase;margin-bottom:4px;color:#9a3412;font-weight:700">Observação interna — uso da produção (não sai na via do cliente)</div><p style="font-size:11.5px;color:#7c2d12">${esc(o.obsInterna)}</p></div>`:""}
     <div style="margin-top:30px;display:flex;gap:40px"><div style="flex:1;border-top:1px solid #cbd5e1;padding-top:6px;text-align:center;font-size:10.5px;color:#94a3b8">Produção / Conferência</div><div style="flex:1;border-top:1px solid #cbd5e1;padding-top:6px;text-align:center;font-size:10.5px;color:#94a3b8">Responsável</div></div>
-    <div style="margin-top:20px;text-align:center;font-size:10px;color:#cbd5e1">Documento interno de produção — sem valores financeiros.</div>
+    ${pdfFooter(o,"Ordem de produção")}
+    <div style="margin-top:8px;text-align:center;font-size:10px;color:#cbd5e1">Documento interno de produção — sem valores financeiros.</div>
   </div>`;
 }
 
@@ -1484,7 +1507,7 @@ function buscaCEP(cep,prefix){cep=(cep||"").replace(/\D/g,"");const msg=document
   fetch("https://viacep.com.br/ws/"+cep+"/json/").then(r=>r.json()).then(d=>{
     if(d.erro){if(msg)msg.textContent="CEP não encontrado.";toast("CEP não encontrado","Verifique o número.","warn2");return;}
     const set=(k,v)=>{const el=g(k);if(el&&v)el.value=v;};
-    set("endereco",d.logradouro);set("bairro",d.bairro);set("cidade",d.localidade);set("uf",d.uf);
+    set("endereco",d.logradouro);set("logradouro",d.logradouro);set("bairro",d.bairro);set("cidade",d.localidade);set("uf",d.uf);
     if(msg)msg.textContent="";const num=g("numero");if(num)num.focus();
     toast("Endereço preenchido",(d.localidade||"")+"/"+(d.uf||""));
   }).catch(()=>{if(msg)msg.textContent="Sem conexão para buscar o CEP — preencha manualmente.";});}
@@ -2610,7 +2633,7 @@ const fCP={q:"",sit:"",cat:"",forma:"",contaFin:"",valor:"",nDoc:""};
 function cpSetAba(a){cpAba=a;const o=curCP;cpModal(o);}
 function VIEW_contasPagar(){
   let list=DB.contasPagar.filter(c=>(typeof cpVisivel!=="function")||cpVisivel(c));
-  const q=fCP.q.toLowerCase();if(q)list=list.filter(c=>(c.fornecedor+" "+c.historico+" "+(c.nDoc||"")).toLowerCase().includes(q));
+  const q=fCP.q.toLowerCase();if(q)list=list.filter(c=>((c.descricao||"")+" "+(c.fornecedor||"")+" "+(c.historico||"")+" "+(c.nDoc||"")).toLowerCase().includes(q));
   if(fCP.sit)list=list.filter(c=>cpSituacao(c)===fCP.sit);
   if(fCP.cat)list=list.filter(c=>c.categoria===fCP.cat);
   if(fCP.forma)list=list.filter(c=>c.forma===fCP.forma);
@@ -2642,10 +2665,10 @@ function VIEW_contasPagar(){
    </div></div>
    <div class="cp-main">
     ${ph("Contas a pagar","Títulos a pagar por fornecedor. Salvar cria em aberto; Salvar e dar baixa registra o pagamento no caixa.",btn("Incluir conta","btn-primary","cpNovo()","plus"))}
-    <div class="toolbar"><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input value="${esc(fCP.q)}" placeholder="Pesquise por fornecedor, histórico ou documento" oninput="fCP.q=this.value;reflow('contas-pagar')"></div></div>
+    <div class="toolbar"><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input value="${esc(fCP.q)}" placeholder="Pesquise por descrição, fornecedor, histórico ou documento" oninput="fCP.q=this.value;reflow('contas-pagar')"></div></div>
     ${bulkBar(scope,btn("Baixar selecionados","btn-outline btn-sm","cpBaixarSel()","check")+btn("Excluir selecionados","btn-danger btn-sm","cpExcluirSel()","trash")+btn("Imprimir agrupado","btn-ghost btn-sm","toast('Impressão','Agrupado por fornecedor (simulado).','info')","print"))}
-    <div class="card cp-tablewrap"><table class="tbl" style="min-width:720px"><thead><tr>${cbHead(scope,list.map(c=>c.id))}<th>Fornecedor</th><th>Histórico</th><th>Forma</th><th>Vencimento</th><th style="text-align:right">Valor</th><th>Situação</th><th></th><th style="padding-right:14px"></th></tr></thead><tbody>
-    ${list.length?list.map(c=>`<tr class="row-click" onclick="cpAbrir('${c.id}')">${cbCell(scope,c.id)}<td style="font-weight:600">${esc(c.fornecedor)}</td><td class="subtle" style="font-size:12.5px;max-width:340px">${esc(c.historico||"—")}</td><td>${FORMAS[c.forma]||c.forma}</td><td style="color:${cpSituacao(c)==='ATRASADA'?'var(--danger)':'var(--muted)'}">${c.vencimento}</td><td style="text-align:right;font-weight:600" class="tnum">${money(c.valor)}</td><td>${cpBadge(c)}</td><td class="subtle" style="font-size:12px">${(c.anexos||[]).length?svg("file",13):""}${c.ocorrencia&&c.ocorrencia!=="Única"?" ↻":""}</td><td style="padding-right:14px;text-align:right" onclick="event.stopPropagation()">${menu([["Abrir / editar","cpAbrir('"+c.id+"')","","edit"],cpSituacao(c)!=="PAGA"&&!c.cancelada?["Dar baixa","cpBaixaUI('"+c.id+"')","","cash"]:null,cpPago(c)>0?["Estornar pagamento","cpEstornar('"+c.id+"')","danger","refund"]:null,!c.cancelada&&cpSituacao(c)!=="PAGA"?["Cancelar título","cpCancelar('"+c.id+"')","danger","trash"]:null,"-",["Excluir","cpExcluirSerieUI('"+c.id+"')","danger","trash"]].filter(Boolean))}</td></tr>`).join(""):`<tr><td colspan="9"><div class="empty">${svg("card",34)}<p>Nenhuma conta a pagar neste filtro.</p></div></td></tr>`}
+    <div class="card cp-tablewrap"><table class="tbl" style="min-width:760px"><thead><tr>${cbHead(scope,list.map(c=>c.id))}<th>Descrição</th><th>Fornecedor</th><th>Forma</th><th>Vencimento</th><th style="text-align:right">Valor</th><th>Situação</th><th></th><th style="padding-right:14px"></th></tr></thead><tbody>
+    ${list.length?list.map(c=>`<tr class="row-click" onclick="cpAbrir('${c.id}')">${cbCell(scope,c.id)}<td style="font-weight:600">${esc(c.descricao||c.historico||"—")}</td><td class="subtle" style="font-size:12.5px;max-width:280px">${esc(c.fornecedor||"—")}</td><td>${FORMAS[c.forma]||c.forma}</td><td style="color:${cpSituacao(c)==='ATRASADA'?'var(--danger)':'var(--muted)'}">${c.vencimento}</td><td style="text-align:right;font-weight:600" class="tnum">${money(c.valor)}</td><td>${cpBadge(c)}</td><td class="subtle" style="font-size:12px">${(c.anexos||[]).length?svg("file",13):""}${c.ocorrencia&&c.ocorrencia!=="Única"?" ↻":""}</td><td style="padding-right:14px;text-align:right" onclick="event.stopPropagation()">${menu([["Abrir / editar","cpAbrir('"+c.id+"')","","edit"],cpSituacao(c)!=="PAGA"&&!c.cancelada?["Dar baixa","cpBaixaUI('"+c.id+"')","","cash"]:null,cpPago(c)>0?["Estornar pagamento","cpEstornar('"+c.id+"')","danger","refund"]:null,!c.cancelada&&cpSituacao(c)!=="PAGA"?["Cancelar título","cpCancelar('"+c.id+"')","danger","trash"]:null,"-",["Excluir","cpExcluirSerieUI('"+c.id+"')","danger","trash"]].filter(Boolean))}</td></tr>`).join(""):`<tr><td colspan="9"><div class="empty">${svg("card",34)}<p>Nenhuma conta a pagar neste filtro.</p></div></td></tr>`}
     </tbody></table></div>
    </div>
    <div class="card cp-info"><div class="card-b">
@@ -2668,7 +2691,7 @@ VIEWS["categorias-fin"]=()=>ph("Categorias financeiras","Categorias usadas em co
 
 function cpNovo(){curCP=null;cpAba="pagamento";cpModal(null);}
 function cpAbrir(id){curCP=DB.contasPagar.find(c=>c.id===id)||null;cpAba="pagamento";cpModal(curCP);}
-function cpModal(c){const isEdit=!!c;const v=c||{fornecedor:"",valor:"",emissao:hojeBR(),competencia:hojeBR(),vencimento:"",historico:"",forma:"",contaFin:"",categoria:"Sem categoria",nDoc:"",juros:0,multa:0,ocorrencia:"Única",anexos:[]};
+function cpModal(c){const isEdit=!!c;const v=c||{descricao:"",fornecedor:"",valor:"",emissao:hojeBR(),competencia:hojeBR(),vencimento:"",historico:"",forma:"",contaFin:"",categoria:"Sem categoria",nDoc:"",juros:0,multa:0,ocorrencia:"Única",anexos:[]};
   const enc=isEdit?cpEncargos(c):{juros:0,multa:0};const tot=isEdit?cpTotal(c):num0(v.valor);
   const abaBtn=(k,l,ic)=>`<button class="btn btn-sm ${cpAba===k?'btn-outline':'btn-ghost'}" style="${cpAba===k?'':'background:transparent;box-shadow:none'}" onclick="cpSetAba('${k}')">${svg(ic,15)} ${l}</button>`;
   let abaHtml="";
@@ -2697,7 +2720,8 @@ function cpModal(c){const isEdit=!!c;const v=c||{fornecedor:"",valor:"",emissao:
   else abaHtml=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><b>Anexos</b>${btn("Adicionar anexo","btn-outline btn-sm","cpAddAnexo()","plus")}</div>${(v.anexos||[]).length?`<table class="tbl"><thead><tr><th>Nome</th><th>Tipo</th><th>Data</th><th>Usuário</th></tr></thead><tbody>${v.anexos.map(a=>`<tr><td>${esc(a.nome)}</td><td>${esc(a.tipo)}</td><td>${a.data}</td><td>${esc(a.usuario||"")}</td></tr>`).join("")}</tbody></table>`:'<p class="subtle">Nenhum anexo. No protótipo, o anexo é simulado por nome e metadados (boleto, NF, recibo, comprovante, imagem, PDF, XML).</p>'}`;
   modal(`<div class="dlg-h"><b>Conta a pagar</b><button class="x" onclick="closeModal()">✕</button></div>
    <div class="dlg-b">
-    <div class="grid g2"><div style="grid-column:1/2"><label class="lbl">Fornecedor *</label><input class="inp" id="cp-forn" list="cp-forn-list" value="${esc(v.fornecedor)}" placeholder="Nome do fornecedor"><datalist id="cp-forn-list">${fornNomes().map(f=>`<option>${f}</option>`).join("")}</datalist><div class="field-err" id="cp-err"></div></div>
+    <div class="grid g2"><div style="grid-column:1/3"><label class="lbl">Descrição da despesa *</label><input class="inp" id="cp-desc" list="cp-desc-list" value="${esc(v.descricao||'')}" placeholder="Ex.: Aluguel, Energia elétrica, Compra de vidro, Marketing Google..."><datalist id="cp-desc-list">${["Aluguel","Energia elétrica","Água","Internet","Telefone","Combustível","Compra de vidro","Compra de alumínio","Ferragens","Marketing Google","Marketing Meta","Folha de pagamento","Pró-labore","Manutenção","Material de escritório","Honorários contábeis","Seguro","Impostos"].map(x=>`<option>${x}</option>`).join("")}</datalist><div class="field-err" id="cp-err"></div></div></div>
+    <div class="grid g2" style="margin-top:10px"><div><label class="lbl">Fornecedor (opcional)</label><input class="inp" id="cp-forn" list="cp-forn-list" value="${esc(v.fornecedor||'')}" placeholder="Quem recebe (opcional)"><datalist id="cp-forn-list">${fornNomes().map(f=>`<option>${f}</option>`).join("")}</datalist></div>
      <div><label class="lbl">Valor (R$) *</label><input class="inp" type="number" id="cp-valor" value="${num0(v.valor)||''}" placeholder="0,00"></div></div>
     <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px">
      <div><label class="lbl">Emissão *</label><input class="inp" type="date" id="cp-emissao" value="${brToISO(v.emissao)}"></div>
@@ -2712,13 +2736,13 @@ function cpModal(c){const isEdit=!!c;const v=c||{fornecedor:"",valor:"",emissao:
    </div>
    <div class="dlg-f"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-outline" onclick="cpSalvar(true)">Salvar e dar baixa</button><button class="btn btn-primary" onclick="cpSalvar(false)">${svg("save",16)} Salvar</button></div>`,"xl");
 }
-function cpColeta(){const f=id=>document.getElementById(id);const forn=f("cp-forn").value.trim();const valor=num0(f("cp-valor").value);
-  if(!forn){f("cp-err").textContent="Informe o fornecedor.";return null;}
+function cpColeta(){const f=id=>document.getElementById(id);const desc=(f("cp-desc")||{}).value.trim();const forn=f("cp-forn").value.trim();const valor=num0(f("cp-valor").value);
+  if(!desc){f("cp-err").textContent="Informe a descrição da despesa.";return null;}
   if(!(valor>0)){f("cp-err").textContent="Informe um valor válido.";return null;}
   const venc=isoToBR(f("cp-venc").value);if(!venc){f("cp-err").textContent="Informe o vencimento.";return null;}
   const lojaId=(f("cp-loja")||{}).value||"";if(!lojaId){f("cp-err").textContent="Selecione a loja/operação da conta.";return null;}
   const g=id=>document.getElementById(id);
-  return {lojaId,createdBy:(typeof CURR_USER!=="undefined"&&CURR_USER?CURR_USER.nome:"—"),criadoEm:hojeBR(),fornecedor:forn,valor,emissao:isoToBR(g("cp-emissao").value)||hojeBR(),competencia:isoToBR(g("cp-comp").value)||hojeBR(),vencimento:venc,historico:g("cp-hist").value.trim(),
+  return {lojaId,createdBy:(typeof CURR_USER!=="undefined"&&CURR_USER?CURR_USER.nome:"—"),criadoEm:hojeBR(),descricao:desc,fornecedor:forn,valor,emissao:isoToBR(g("cp-emissao").value)||hojeBR(),competencia:isoToBR(g("cp-comp").value)||hojeBR(),vencimento:venc,historico:g("cp-hist").value.trim(),
     forma:(g("cp-forma")||{}).value||"",contaFin:(g("cp-conta")||{}).value||"",categoria:(g("cp-cat")||{}).value||"Sem categoria",nDoc:(g("cp-ndoc")||{}).value||"",juros:num0((g("cp-juros")||{}).value),multa:num0((g("cp-multa")||{}).value),ocorrencia:(g("cp-ocor")||{}).value||(curCP?curCP.ocorrencia:"Única"),
     recQtd:num0((g("cp-qtd")||{}).value)||(curCP?curCP.recQtd:0),recInt:num0((g("cp-int")||{}).value)||(curCP?curCP.recInt:0),recDiaUtil:(g("cp-diautil")||{}).checked||false};
 }
@@ -2765,7 +2789,7 @@ function cpBaixaUI(id){const c=DB.contasPagar.find(x=>x.id===id);if(!c)return;co
 function cpBaixar(id){const c=DB.contasPagar.find(x=>x.id===id);if(!c)return;const valor=num0(document.getElementById("cb-valor").value);
   if(!(valor>0)){document.getElementById("cb-err").textContent="Informe o valor pago.";return;}
   const data=isoToBR(document.getElementById("cb-data").value)||hojeBR();const forma=document.getElementById("cb-forma").value;const contaFin=document.getElementById("cb-conta").value;const desc=num0(document.getElementById("cb-desc").value);const obs=document.getElementById("cb-obs").value.trim();
-  const movId=addCaixa("saida",valor,"Pagamento a "+c.fornecedor+(c.nDoc?" ("+c.nDoc+")":""),null,forma,data,c.lojaId);
+  const movId=addCaixa("saida",valor,"Pagamento: "+(c.descricao||c.fornecedor||"conta")+(c.fornecedor&&c.descricao?" — "+c.fornecedor:"")+(c.nDoc?" ("+c.nDoc+")":""),null,forma,data,c.lojaId);
   c.pagamentos.push({id:uid("pg"),data,valor,forma,contaFin,desconto:desc,obs,usuario:"Financeiro",estornado:false,movId});
   c.forma=forma;c.contaFin=contaFin;
   closeModal();toast("Baixa registrada","Caixa: − "+money(valor)+" • "+CP_SIT[cpSituacao(c)][0]);go("contas-pagar");
@@ -2773,10 +2797,10 @@ function cpBaixar(id){const c=DB.contasPagar.find(x=>x.id===id);if(!c)return;con
 function cpBaixarSel(){const ids=selIds("cp");if(!ids.length){toast("Selecione títulos","Marque as contas para baixar.","warn2");return;}
   const abertas=ids.map(id=>DB.contasPagar.find(c=>c.id===id)).filter(c=>c&&!c.cancelada&&cpSituacao(c)!=="PAGA");
   if(!abertas.length){toast("Nada a baixar","Selecionados já pagos/cancelados.","info");return;}
-  confirmDlg({title:"Baixar selecionados",okLabel:"Baixar "+abertas.length,msg:"Registrar o pagamento de <b>"+abertas.length+"</b> título(s) pelo valor total, hoje? Cada um gera uma única saída no caixa.",onOk:()=>{abertas.forEach(c=>{const v=r2(cpTotal(c)-cpPago(c));const movId=addCaixa("saida",v,"Pagamento a "+c.fornecedor,null,c.forma||"PIX",hojeBR(),c.lojaId);c.pagamentos.push({id:uid("pg"),data:hojeBR(),valor:v,forma:c.forma||"PIX",contaFin:c.contaFin,desconto:0,obs:"Baixa em lote",usuario:"Financeiro",estornado:false,movId});});selClear("cp");toast("Baixa em lote",abertas.length+" título(s) pagos.");go("contas-pagar");}});
+  confirmDlg({title:"Baixar selecionados",okLabel:"Baixar "+abertas.length,msg:"Registrar o pagamento de <b>"+abertas.length+"</b> título(s) pelo valor total, hoje? Cada um gera uma única saída no caixa.",onOk:()=>{abertas.forEach(c=>{const v=r2(cpTotal(c)-cpPago(c));const movId=addCaixa("saida",v,"Pagamento: "+(c.descricao||c.fornecedor||"conta"),null,c.forma||"PIX",hojeBR(),c.lojaId);c.pagamentos.push({id:uid("pg"),data:hojeBR(),valor:v,forma:c.forma||"PIX",contaFin:c.contaFin,desconto:0,obs:"Baixa em lote",usuario:"Financeiro",estornado:false,movId});});selClear("cp");toast("Baixa em lote",abertas.length+" título(s) pagos.");go("contas-pagar");}});
 }
 function cpEstornar(id){const c=DB.contasPagar.find(x=>x.id===id);if(!c||!cpPago(c))return;
-  confirmDlg({title:"Estornar pagamento",danger:true,okLabel:"Estornar",msg:"Estornar os pagamentos de <b>"+esc(c.fornecedor)+"</b>? Uma entrada de reversão será lançada no caixa.",onOk:()=>{(c.pagamentos||[]).filter(p=>!p.estornado).forEach(p=>{p.estornado=true;addCaixa("entrada",p.valor,"Estorno de pagamento a "+c.fornecedor,null,p.forma,hojeBR(),c.lojaId);});toast("Pagamento estornado","","warn2");go("contas-pagar");}});
+  confirmDlg({title:"Estornar pagamento",danger:true,okLabel:"Estornar",msg:"Estornar os pagamentos de <b>"+esc(c.descricao||c.fornecedor||"conta")+"</b>? Uma entrada de reversão será lançada no caixa.",onOk:()=>{(c.pagamentos||[]).filter(p=>!p.estornado).forEach(p=>{p.estornado=true;addCaixa("entrada",p.valor,"Estorno: "+(c.descricao||c.fornecedor||"conta"),null,p.forma,hojeBR(),c.lojaId);});toast("Pagamento estornado","","warn2");go("contas-pagar");}});
 }
 function cpExcluirSel(){const ids=selIds("cp");if(!ids.length){toast("Selecione títulos","Marque as contas para excluir.","warn2");return;}
   confirmDlg({title:"Excluir contas a pagar",danger:true,okLabel:"Excluir "+ids.length+" título(s)",msg:"Excluir os <b>"+ids.length+"</b> título(s) selecionado(s)? Títulos com pagamento registrado serão ignorados (estorne antes de excluir).",onOk:()=>{let del=0,skip=0;ids.forEach(id=>{const c=DB.contasPagar.find(x=>x.id===id);if(!c)return;if(cpPago(c)>0.001){skip++;return;}DB.contasPagar=DB.contasPagar.filter(x=>x.id!==id);del++;});if(typeof audit==="function")audit("Excluiu contas a pagar ("+del+")","Contas a pagar","");selClear("cp");toast(del+" excluído(s)"+(skip?" • "+skip+" ignorado(s) (com pagamento)":""),"","warn2");go("contas-pagar");}});}
@@ -2934,7 +2958,15 @@ VIEWS.configuracoes=()=>{
       <div><label class="lbl">WhatsApp</label><input class="inp" id="emp-whats" value="${esc(e.whats)}"></div>
       <div><label class="lbl">E-mail</label><input class="inp" id="emp-email" value="${esc(e.email)}"></div>
       <div><label class="lbl">Validade padrão (dias)</label><input class="inp" id="emp-validade" type="number" value="${esc(e.validade)}"></div>
-      <div style="grid-column:1/3"><label class="lbl">Endereço</label><input class="inp" id="emp-endereco" value="${esc(e.endereco)}"></div>
+      <div><label class="lbl">Inscrição municipal</label><input class="inp" id="emp-im" value="${esc(e.im||'')}"></div>
+      <div><label class="lbl">Site</label><input class="inp" id="emp-site" value="${esc(e.site||'')}"></div>
+      <div><label class="lbl">CEP</label><input class="inp" id="emp-cep" value="${esc(e.cep||'')}" onblur="buscaCEP(this.value,'emp')"><div class="field-err" id="emp-cep-msg"></div></div>
+      <div><label class="lbl">Logradouro</label><input class="inp" id="emp-logradouro" value="${esc(e.logradouro||'')}"></div>
+      <div><label class="lbl">Número</label><input class="inp" id="emp-numero" value="${esc(e.numero||'')}"></div>
+      <div><label class="lbl">Complemento</label><input class="inp" id="emp-complemento" value="${esc(e.complemento||'')}"></div>
+      <div><label class="lbl">Bairro</label><input class="inp" id="emp-bairro" value="${esc(e.bairro||'')}"></div>
+      <div><label class="lbl">Cidade</label><input class="inp" id="emp-cidade" value="${esc(e.cidade||'')}"></div>
+      <div><label class="lbl">UF</label><input class="inp" id="emp-uf" value="${esc(e.uf||'')}" maxlength="2"></div>
       <div style="grid-column:1/3"><label class="lbl">Garantia padrão</label><input class="inp" id="emp-garantia" value="${esc(e.garantia)}"></div>
       <div style="grid-column:1/3"><label class="lbl">Rodapé do documento</label><input class="inp" id="emp-rodape" value="${esc(e.rodape)}"></div>
       <div style="grid-column:1/3;margin-top:2px"><div class="hint">Campos usados no <b>contrato</b> (o sistema não gera contrato sem eles):</div></div>
@@ -2991,7 +3023,8 @@ VIEWS.configuracoes=()=>{
 function cfgPersist(){try{localStorage.setItem("vg_config_empresa",JSON.stringify(DB.config.empresa));}catch(e){}}
 function cfgHydrate(){try{const s=localStorage.getItem("vg_config_empresa");if(s){const p=JSON.parse(s);if(p&&typeof p==="object")Object.assign(DB.config.empresa,p);}}catch(e){}}
 function salvarEmpresa(){const e=DB.config.empresa;const g=id=>{const el=document.getElementById(id);return el?el.value:undefined;};
-  ["fantasia","razao","cnpj","ie","tel","whats","email","endereco","garantia","rodape","representante","repCpf","foro","foroComarca","foroEstado","foroTexto"].forEach(k=>{const v=g("emp-"+k);if(v!==undefined)e[k]=v;});
+  ["fantasia","razao","cnpj","ie","im","site","tel","whats","email","cep","logradouro","numero","complemento","bairro","cidade","uf","garantia","rodape","representante","repCpf","foro","foroComarca","foroEstado","foroTexto"].forEach(k=>{const v=g("emp-"+k);if(v!==undefined)e[k]=v;});
+  e.endereco=(typeof enderecoEmpresaTexto==="function")?enderecoEmpresaTexto(e).join(" — "):e.endereco;
   const fr=document.getElementById("emp-foroRevisado");if(fr)e.foroRevisado=fr.checked;
   const val=g("emp-validade");if(val!==undefined)e.validade=num0(val);
   cfgPersist();if(typeof audit==="function")audit("Salvou dados da empresa","Configurações",e.fantasia||"");if(typeof buildNav==="function")buildNav();
@@ -3182,7 +3215,7 @@ const VEND_LOJA={v1:"L1",v2:"L2",v3:"L3",v4:"L1"};
 (function(){
   DB.orcamentos.forEach(o=>{const v=DB.vendedores.find(x=>x.nome===o.vendNome);o.vendedorId=v?v.id:"v1";o.lojaId=o.lojaId||VEND_LOJA[o.vendedorId];o.createdBy=o.createdBy||(v?v.nome:"Carla Mendes");o.criadoEm=o.criadoEm||o.criado;});
   // variar loja das contas a pagar para demonstrar isolamento financeiro
-  const lojasCP=["L1","L1","L2","L3","L2","L1","L3","L1"];(DB.contasPagar||[]).forEach((c,i)=>{c.lojaId=lojasCP[i%lojasCP.length];c.createdBy=c.createdBy||"Financeiro";});
+  const lojasCP=["L1","L1","L2","L3","L2","L1","L3","L1"];(DB.contasPagar||[]).forEach((c,i)=>{c.lojaId=lojasCP[i%lojasCP.length];c.createdBy=c.createdBy||"Financeiro";if(!c.descricao)c.descricao=c.historico||c.fornecedor||"Despesa";});
   // obras herdam a loja do pedido
   DB.obras.forEach(ob=>{const o=DB.orcByN(ob.n);ob.lojaId=o?o.lojaId:"L1";});
   // movimentos de caixa herdam a loja do pedido quando houver
@@ -3225,15 +3258,26 @@ function setLoja(id){CURR_LOJA=id;if(typeof audit==="function")audit("Trocou ope
 /* ===================== MÓDULO CENTRAL DE DOCUMENTOS (contrato + termo) ===================== */
 DB.docs=DB.docs||[];
 (function(){const e=DB.config.empresa;if(e.representante==null)e.representante="";if(e.repCpf==null)e.repCpf="";if(e.foro==null)e.foro="";if(!e.foroComarca)e.foroComarca="Belo Horizonte";if(!e.foroEstado)e.foroEstado="Minas Gerais";if(e.foroTexto==null)e.foroTexto="";if(e.foroRevisado==null)e.foroRevisado=false;})();
+/* endereço estruturado da empresa (deriva do campo "endereco" legado quando ausente) */
+(function(){const e=DB.config.empresa;["im","site","cep","logradouro","numero","complemento","bairro","cidade","uf"].forEach(k=>{if(e[k]==null)e[k]="";});
+  if(!e.logradouro&&e.endereco){const m=e.endereco.match(/^(.*?),\s*(\d+\w*)\s*$/);if(m){e.logradouro=m[1].trim();e.numero=m[2].trim();}else{e.logradouro=e.endereco;}}
+  if(!e.cidade&&e.foroComarca)e.cidade=e.foroComarca;
+  if(!e.uf){const map={"Minas Gerais":"MG","São Paulo":"SP","Rio de Janeiro":"RJ"};e.uf=map[e.foroEstado]||"";}
+})();
 function docRegistrar(tipo,o,status){DB.docs.unshift({id:uid("doc"),tipo,vendaId:o.n,lojaId:o.lojaId||"",emitidoEm:hojeBR(),emitidoPor:(typeof CURR_USER!=="undefined"&&CURR_USER?CURR_USER.nome:"—"),versao:1,status:status||"EMITIDO"});}
 function contratoPlaceholders(o){const e=DB.config.empresa;const cli=DB.cliById(o.clienteId)||{};const t=calcOrc(o);const ent=orcRecebido(o)||condEntradaOrc(o);
   return {EMPRESA_RAZAO_SOCIAL:e.razao,EMPRESA_NOME_FANTASIA:e.fantasia,EMPRESA_CNPJ:e.cnpj,EMPRESA_ENDERECO:e.endereco,EMPRESA_TELEFONE:e.tel,EMPRESA_EMAIL:e.email,EMPRESA_REPRESENTANTE:e.representante,EMPRESA_REPRESENTANTE_CPF:e.repCpf,
     CLIENTE_NOME:o.clienteNome,CLIENTE_DOCUMENTO:cli.doc||"",CLIENTE_ENDERECO:(cli.obras&&cli.obras[0]?[cli.obras[0].endereco,cli.obras[0].cidade].filter(Boolean).join(", "):"")||cli.endereco||"",CLIENTE_TELEFONE:cli.tel||"",CLIENTE_EMAIL:cli.email||"",
     VENDA_NUMERO:o.n,CONTRATO_NUMERO:"C-"+o.n,DATA_EMISSAO:hojeBR(),OBRA_NOME:o.obraNome||"",VALOR_TOTAL:money(t.total),ENTRADA:money(ent),SALDO:money(r2(t.total-ent)),CONDICAO_PAGAMENTO:o.condicao?COND_TIPOS[o.condicao.tipo]:"A combinar",PRAZO_ENTREGA:prevEntregaTxt(o),GARANTIA:e.garantia,FORO:e.foro,FORO_CLAUSULA:foroClausula()};}
 function foroClausula(){const e=DB.config.empresa;if(e.foroTexto&&e.foroTexto.trim())return e.foroTexto.trim();const comarca=e.foroComarca||"Belo Horizonte";const estado=e.foroEstado||"Minas Gerais";return "Fica eleito o foro da Comarca de "+comarca+", Estado de "+estado+", para dirimir eventuais controvérsias decorrentes deste contrato, por ser o foro do domicílio da CONTRATADA, ressalvadas as hipóteses em que a legislação aplicável assegure à parte contratante a utilização de foro diverso ou mais favorável.";}
-function contratoValidar(o){const e=DB.config.empresa;const cli=DB.cliById(o.clienteId)||{};const miss=[];
+function validarDadosEmpresa(){const e=DB.config.empresa;const miss=[];
+  if(!(e.fantasia||e.razao))miss.push("razão social ou nome fantasia da empresa ausente");
   if(!e.cnpj)miss.push("CNPJ da empresa ausente");
-  if(!e.endereco)miss.push("endereço da empresa ausente");
+  if(!(e.logradouro||e.endereco))miss.push("endereço da empresa ausente");
+  if(!e.cidade||!e.uf)miss.push("cidade/UF da empresa ausente");
+  if(!e.tel&&!e.email)miss.push("telefone ou e-mail da empresa ausente");
+  return miss;}
+function contratoValidar(o){const e=DB.config.empresa;const cli=DB.cliById(o.clienteId)||{};const miss=validarDadosEmpresa();
   if(!e.representante)miss.push("representante da contratada não cadastrado");
   if(!o.clienteNome)miss.push("nome do cliente ausente");
   if(!(cli.doc))miss.push("documento (CPF/CNPJ) do cliente ausente");
@@ -3288,7 +3332,8 @@ function pdfContrato(o){const P=contratoPlaceholders(o);const t=calcOrc(o);const
      <div style="border-top:1px solid #cbd5e1;padding-top:6px;text-align:center;font-size:11px;color:#475569">Testemunha 1</div>
      <div style="border-top:1px solid #cbd5e1;padding-top:6px;text-align:center;font-size:11px;color:#475569">Testemunha 2</div>
    </div>
-   <div style="margin-top:16px;text-align:center;font-size:10px;color:#94a3b8">${esc(DB.config.empresa.rodape||"")} — minuta para revisão jurídica.</div>
+   ${pdfFooter(o,"Contrato")}
+   <div style="margin-top:8px;text-align:center;font-size:10px;color:#94a3b8">Minuta para revisão jurídica.</div>
   </div>`;}
 function pdfTermo(o){const cli=DB.cliById(o.clienteId)||{};const ob=obraByN(o.n)||{};const e=DB.config.empresa;
   const itens=o.ambientes.map(a=>a.itens.map(it=>{const p=DB.prodById(it.produtoId);return `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 8px 6px 0">${esc(a.nome)}</td><td style="padding:6px 8px">${esc(p?p.descricao:"—")}</td><td class="tnum" style="padding:6px 8px">${pecasItem(it)} pç</td><td class="muted" style="padding:6px 0 6px 8px;font-size:10.5px">${it.medidas.map(m=>memoMedida(it.regra,m,null,p)).join("; ")}</td></tr>`}).join("")).join("");
@@ -3306,7 +3351,8 @@ function pdfTermo(o){const cli=DB.cliById(o.clienteId)||{};const ob=obraByN(o.n)
      <div style="border-top:1px solid #cbd5e1;padding-top:6px;text-align:center;font-size:11px;color:#475569">Cliente / Recebedor — CPF<br><span class="muted">Data: ${hojeBR()}</span></div>
      <div style="border-top:1px solid #cbd5e1;padding-top:6px;text-align:center;font-size:11px;color:#475569">Responsável pela empresa</div>
    </div>
-   <div style="margin-top:14px;text-align:center;font-size:10px;color:#94a3b8">A finalização da obra exige confirmação específica no sistema — a emissão deste termo não finaliza a obra automaticamente.</div>
+   ${pdfFooter(o,"Termo de entrega")}
+   <div style="margin-top:8px;text-align:center;font-size:10px;color:#94a3b8">A finalização da obra exige confirmação específica no sistema — a emissão deste termo não finaliza a obra automaticamente.</div>
   </div>`;}
 function confirmarEntregaFinalizar(id){const ob=(typeof obraById==="function")?obraById(id):DB.obras.find(x=>x.id===id);if(!ob)return;
   confirmDlg({title:"Confirmar entrega e finalizar obra",okLabel:"Confirmar entrega",msg:"Confirmar a entrega e <b>finalizar</b> a obra #"+ob.n+"? Esta ação registra o Termo de Entrega e conclui a obra.",onOk:()=>{ob.etapaOp="FINALIZADA";ob.progresso=100;if(!ob.datas.efetFim)ob.datas.efetFim=hojeBR();const o=DB.orcByN(ob.n);if(o){docRegistrar("TERMO_ENTREGA",o,"CONFIRMADO");o.hist=o.hist||[];o.hist.push({d:hojeBR(),por:(CURR_USER?CURR_USER.nome:"—"),acao:"Entrega confirmada — obra finalizada"});}if(typeof audit==="function")audit("Confirmou entrega/finalizou obra","Obras","#"+ob.n);toast("Obra finalizada","Termo de entrega registrado.");go("obra");}});}
@@ -3427,7 +3473,7 @@ function cancelarReclamacao(id){const f=reclById(id);if(!f)return;confirmDlg({ti
 function reclAddCusto(id){const f=reclById(id);if(!f)return;const o=f.o;const valor=num0((window.prompt&&window.prompt("Valor do custo desta reclamação (R$):",String(f.r.custoGerado||0)))||0);if(!(valor>0))return;
   o.custosExtras=o.custosExtras||[];o.custosExtras.push({id:uid("ce"),desc:"Custo de reclamação / assistência #"+f.r.num,valor,data:hojeBR(),por:(CURR_USER?CURR_USER.nome:"—")});
   const criarCP=window.confirm&&window.confirm("Criar também uma conta a pagar vinculada?");
-  if(criarCP){DB.contasPagar=DB.contasPagar||[];DB.contasPagar.push({id:uid("cp"),fornecedor:"Assistência — reclamação #"+f.r.num,valor,emissao:hojeBR(),competencia:hojeBR(),vencimento:hojeBR(),historico:"Reclamação #"+f.r.num+" — "+o.clienteNome,forma:"PIX",contaFin:(DB.contas[0]||{}).nome||"",categoria:"Sem categoria",lojaId:o.lojaId||CURR_LOJA||"",createdBy:(CURR_USER?CURR_USER.nome:"—"),criadoEm:hojeBR(),pagamentos:[],anexos:[],ocorrencia:"Única"});}
+  if(criarCP){DB.contasPagar=DB.contasPagar||[];DB.contasPagar.push({id:uid("cp"),descricao:"Assistência técnica — reclamação #"+f.r.num,fornecedor:"",valor,emissao:hojeBR(),competencia:hojeBR(),vencimento:hojeBR(),historico:"Reclamação #"+f.r.num+" — "+o.clienteNome,forma:"PIX",contaFin:(DB.contas[0]||{}).nome||"",categoria:"Sem categoria",lojaId:o.lojaId||CURR_LOJA||"",createdBy:(CURR_USER?CURR_USER.nome:"—"),criadoEm:hojeBR(),pagamentos:[],anexos:[],ocorrencia:"Única"});}
   if(typeof audit==="function")audit("Custo de reclamação","Financeiro","#"+o.n+" "+money(valor));toast("Custo adicionado à venda",money(valor)+(criarCP?" + conta a pagar":""));go("reclamacao");}
 (function(){window.encerrarReclamacao=function(n){const o=DB.orcByN(n);if(!o)return;(o.reclamacoes||[]).forEach(r=>{if(reclAberta(r))r.status="RESOLVIDA";});syncStatusReclamacao(o);toast("Reclamações encerradas","Venda #"+n);go(typeof cur!=="undefined"&&cur==="acompanhamento"?"acompanhamento":"vendas");};})();
 function reclAtrasada(r){if(!reclAberta(r))return false;const p=r.prazoResol;return p&&diasAtraso(p)>0;}

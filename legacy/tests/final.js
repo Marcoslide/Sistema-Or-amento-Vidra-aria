@@ -24,7 +24,7 @@ const ev = (page, fn, arg) => page.evaluate(fn, arg);
   const antes = await ev(page, () => DB.contasPagar.filter(cpVisivel).length);
   await ev(page, () => cpNovo()); await sleep(50);
   const lojaDefault = await ev(page, () => (document.getElementById("cp-loja")||{}).value);
-  await ev(page, () => { document.getElementById("cp-forn").value="Fornecedor L2"; document.getElementById("cp-valor").value="333"; document.getElementById("cp-venc").value="2026-10-10"; document.getElementById("cp-loja").value="L2"; });
+  await ev(page, () => { document.getElementById("cp-desc").value="Despesa L2";document.getElementById("cp-forn").value="Fornecedor L2"; document.getElementById("cp-valor").value="333"; document.getElementById("cp-venc").value="2026-10-10"; document.getElementById("cp-loja").value="L2"; });
   await ev(page, () => cpSalvar(false)); await sleep(50);
   const depois = await ev(page, () => DB.contasPagar.filter(cpVisivel).length);
   const novaLoja = await ev(page, () => DB.contasPagar[DB.contasPagar.length-1].lojaId);
@@ -32,7 +32,7 @@ const ev = (page, fn, arg) => page.evaluate(fn, arg);
   // salvar sem baixa não movimenta caixa
   const caixaSemBaixa = await ev(page, () => caixaSaldo());
   await ev(page, () => cpNovo()); await sleep(40);
-  await ev(page, () => { document.getElementById("cp-forn").value="Sem baixa"; document.getElementById("cp-valor").value="200"; document.getElementById("cp-venc").value="2026-10-11"; });
+  await ev(page, () => { document.getElementById("cp-desc").value="Sem baixa";document.getElementById("cp-forn").value="Sem baixa"; document.getElementById("cp-valor").value="200"; document.getElementById("cp-venc").value="2026-10-11"; });
   await ev(page, () => cpSalvar(false)); await sleep(30);
   chk("§10 Salvar não movimenta caixa", Math.abs(await ev(page,()=>caixaSaldo())-caixaSemBaixa)<0.001);
 
@@ -109,7 +109,7 @@ const ev = (page, fn, arg) => page.evaluate(fn, arg);
   chk("Empresa pré-preenchida (Conceito Glass)", await ev(page,()=>DB.config.empresa.fantasia==="Conceito Glass" && DB.config.empresa.cnpj==="29.881.345/0001-83"));
   chk("Aba Empresa tem inputs com id e botão Salvar", await ev(page,()=>!!document.getElementById("emp-cnpj") && !!document.getElementById("emp-tel") && [...document.querySelectorAll(".view button")].some(b=>/Salvar dados da empresa/i.test(b.textContent))));
   // editar e salvar de verdade
-  await ev(page, () => { document.getElementById("emp-tel").value="(31) 3333-4444"; document.getElementById("emp-endereco").value="Rua José Félix Martins, 713"; salvarEmpresa(); }); await sleep(60);
+  await ev(page, () => { document.getElementById("emp-tel").value="(31) 3333-4444"; document.getElementById("emp-logradouro").value="Rua José Félix Martins"; document.getElementById("emp-numero").value="713"; salvarEmpresa(); }); await sleep(60);
   chk("Salvar grava em DB.config e persiste (localStorage)", await ev(page,()=>{
     const okMem=DB.config.empresa.tel==="(31) 3333-4444";
     let okLS=false; try{okLS=(JSON.parse(localStorage.getItem("vg_config_empresa")).tel==="(31) 3333-4444");}catch(e){}

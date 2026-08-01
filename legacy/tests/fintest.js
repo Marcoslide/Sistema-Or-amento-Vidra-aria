@@ -30,7 +30,7 @@ const ev = (page, fn, arg) => page.evaluate(fn, arg);
   const caixa0 = await ev(page, () => caixaSaldo());
   const nCP0 = await ev(page, () => DB.contasPagar.length);
   await ev(page, () => cpNovo()); await sleep(50);
-  await ev(page, () => { document.getElementById("cp-forn").value="Fornecedor Teste"; document.getElementById("cp-valor").value="500"; document.getElementById("cp-venc").value="2026-09-10"; });
+  await ev(page, () => { document.getElementById("cp-desc").value="Despesa Teste";document.getElementById("cp-forn").value="Fornecedor Teste"; document.getElementById("cp-valor").value="500"; document.getElementById("cp-venc").value="2026-09-10"; });
   await ev(page, () => cpSalvar(false)); await sleep(40);
   const s13 = await ev(page, () => ({ caixa:caixaSaldo(), n:DB.contasPagar.length, sit:cpSituacao(DB.contasPagar[DB.contasPagar.length-1]) }));
   chk("13. Salvar cria título em aberto e NÃO movimenta caixa", Math.abs(s13.caixa-caixa0)<0.001 && s13.n===nCP0+1 && (s13.sit==="EM_ABERTO"||s13.sit==="ATRASADA"||s13.sit==="VENCE_HOJE"), JSON.stringify(s13));
@@ -38,7 +38,7 @@ const ev = (page, fn, arg) => page.evaluate(fn, arg);
   // 14. salvar e dar baixa movimenta caixa uma vez
   const caixa1 = await ev(page, () => caixaSaldo());
   await ev(page, () => cpNovo()); await sleep(40);
-  await ev(page, () => { document.getElementById("cp-forn").value="Fornecedor Baixa"; document.getElementById("cp-valor").value="800"; document.getElementById("cp-venc").value="2026-09-15"; });
+  await ev(page, () => { document.getElementById("cp-desc").value="Despesa Baixa";document.getElementById("cp-forn").value="Fornecedor Baixa"; document.getElementById("cp-valor").value="800"; document.getElementById("cp-venc").value="2026-09-15"; });
   await ev(page, () => cpSalvar(true)); await sleep(50); // abre baixa
   const baixaOpen = await ev(page, () => !!document.getElementById("cb-valor"));
   await ev(page, () => { document.getElementById("cb-valor").value="800"; });
@@ -50,7 +50,7 @@ const ev = (page, fn, arg) => page.evaluate(fn, arg);
   // 15. pagamento parcial mantém saldo
   const caixa2 = await ev(page, () => caixaSaldo());
   await ev(page, () => cpNovo()); await sleep(40);
-  await ev(page, () => { document.getElementById("cp-forn").value="Fornecedor Parcial"; document.getElementById("cp-valor").value="1000"; document.getElementById("cp-venc").value="2026-09-20"; });
+  await ev(page, () => { document.getElementById("cp-desc").value="Despesa Parcial";document.getElementById("cp-forn").value="Fornecedor Parcial"; document.getElementById("cp-valor").value="1000"; document.getElementById("cp-venc").value="2026-09-20"; });
   await ev(page, () => cpSalvar(false)); await sleep(30);
   const idParc = await ev(page, () => DB.contasPagar[DB.contasPagar.length-1].id);
   await ev(page, id => cpBaixaUI(id), idParc); await sleep(40);
