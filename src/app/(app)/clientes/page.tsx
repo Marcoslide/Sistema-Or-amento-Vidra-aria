@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { clienteService } from "@/data/services";
+import { listarClientes } from "@/lib/data/clientes";
 import type { Cliente } from "@/lib/types";
 
 export default function ClientesPage() {
@@ -25,10 +25,10 @@ export default function ClientesPage() {
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    clienteService.listar().then((data) => {
-      setClientes(data);
-      setLoading(false);
-    });
+    listarClientes()
+      .then((data) => setClientes(data))
+      .catch(() => setClientes([]))
+      .finally(() => setLoading(false));
   }, []);
 
   const filtered = useMemo(() => {

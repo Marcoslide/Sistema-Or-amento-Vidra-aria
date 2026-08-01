@@ -6,6 +6,8 @@ import { Bell, LogOut, Plus, Search, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { createClient } from "@/lib/supabase/client";
+import { hasSupabaseEnv } from "@/lib/supabase/env";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +19,14 @@ import {
 
 export function Topbar() {
   const router = useRouter();
+
+  async function sair() {
+    if (hasSupabaseEnv()) {
+      try { await createClient().auth.signOut(); } catch { /* ignora */ }
+    }
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-md sm:px-6 print:hidden">
@@ -66,7 +76,7 @@ export function Topbar() {
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
-              onClick={() => router.push("/login")}
+              onClick={sair}
             >
               <LogOut className="h-4 w-4" />
               Sair

@@ -1,11 +1,21 @@
+import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { hasSupabaseEnv } from "@/lib/supabase/env";
+import { createClient } from "@/lib/supabase/server";
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Guard de sessão: quando o Supabase está configurado, exige usuário autenticado.
+  if (hasSupabaseEnv()) {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) redirect("/login");
+  }
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />

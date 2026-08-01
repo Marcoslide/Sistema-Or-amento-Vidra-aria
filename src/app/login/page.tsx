@@ -1,18 +1,38 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { GalleryVerticalEnd, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { createClient } from "@/lib/supabase/client";
+import { hasSupabaseEnv } from "@/lib/supabase/env";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [erro, setErro] = useState("");
+  const [carregando, setCarregando] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setErro("");
+    if (!hasSupabaseEnv()) {
+      setErro("Supabase não está configurado neste ambiente. Configure as variáveis de ambiente para entrar.");
+      return;
+    }
+    setCarregando(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
+    setCarregando(false);
+    if (error) {
+      setErro("E-mail ou senha inválidos.");
+      return;
+    }
     router.push("/dashboard");
+    router.refresh();
   }
 
   return (
@@ -40,25 +60,11 @@ export default function LoginPage() {
               Do orçamento à obra, tudo em um só lugar.
             </h1>
             <p className="text-sidebar-foreground/70">
-              Especializado em vidraçarias e esquadrias. Monte orçamentos em
-              minutos, acompanhe cada etapa e transmita profissionalismo.
+              Especializado em vidraçarias e esquadrias — Conceito Glass.
             </p>
           </div>
 
-          <div className="flex gap-8 text-sm">
-            <div>
-              <p className="text-2xl font-semibold text-white">6</p>
-              <p className="text-sidebar-foreground/60">Orçamentos ativos</p>
-            </div>
-            <div>
-              <p className="text-2xl font-semibold text-white">5 min</p>
-              <p className="text-sidebar-foreground/60">Para orçar</p>
-            </div>
-            <div>
-              <p className="text-2xl font-semibold text-white">100%</p>
-              <p className="text-sidebar-foreground/60">Do seu segmento</p>
-            </div>
-          </div>
+          <span className="text-xs text-sidebar-foreground/50">Ambiente de homologação (staging)</span>
         </div>
       </div>
 
@@ -72,53 +78,32 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              Acessar o sistema
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Entre com suas credenciais para continuar.
-            </p>
+            <h2 className="text-2xl font-semibold tracking-tight">Acessar o sistema</h2>
+            <p className="text-sm text-muted-foreground">Entre com suas credenciais para continuar.</p>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <Label htmlFor="email">E-mail</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="voce@vidraria.com"
-                defaultValue="carla@vidraria.com"
-              />
+              <Input id="email" type="email" required placeholder="voce@empresa.com"
+                value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="senha">Senha</Label>
-                <button
-                  type="button"
-                  className="text-xs text-primary hover:underline"
-                >
-                  Esqueci minha senha
-                </button>
-              </div>
-              <Input
-                id="senha"
-                type="password"
-                placeholder="••••••••"
-                defaultValue="demo1234"
-              />
+              <Label htmlFor="senha">Senha</Label>
+              <Input id="senha" type="password" required placeholder="••••••••"
+                value={senha} onChange={(e) => setSenha(e.target.value)} />
             </div>
 
-            <Button type="submit" className="w-full gap-1.5">
-              Entrar
+            {erro && <p className="text-sm text-destructive">{erro}</p>}
+
+            <Button type="submit" className="w-full gap-1.5" disabled={carregando}>
+              {carregando ? "Entrando…" : "Entrar"}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </form>
 
           <p className="text-center text-xs text-muted-foreground">
-            Protótipo de validação — qualquer credencial acessa o sistema.{" "}
-            <Link href="/dashboard" className="text-primary hover:underline">
-              Pular login
-            </Link>
+            Autenticação real via Supabase. Sem sessão, o acesso é redirecionado para o login.
           </p>
         </div>
       </div>
