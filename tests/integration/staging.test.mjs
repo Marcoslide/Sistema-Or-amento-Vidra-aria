@@ -192,3 +192,74 @@ test("9. entrada acima do total é limitada (saldo nunca negativo)", { skip }, a
   assert.ok(Number(r.data?.saldo) >= 0, "saldo nunca negativo");
   await limpar(c, saleId);
 });
+
+// ---------- 10-13. App 4 Financeiro: recebimento parcial/total, over, estorno, caixa único ----------
+async function vendaComParcela(c, total, entrada, parcelas) {
+  const saleId = await novaVendaBase(c, total);
+  const r = await c.rpc("fn_transformar_venda", { p_sale_id: saleId, p_idem: uniq("idem"), p_entrada: entrada, p_forma: "Pix", p_conta: CONTA, p_operadora: null, p_parcelas: parcelas, p_venc_primeira: null });
+  assert.ok(!r.error, r.error?.message);
+  const { data: recs } = await c.from("receivables").select("id,valor").eq("sale_id", saleId).order("descricao");
+  return { saleId, recs };
+}
+
+test("10. recebimento parcial e total de parcela + UM caixa cada", { skip }, async () => {
+  const c = await admin();
+  const { saleId, recs } = await vendaComParcela(c, 1000, 0, 1); // uma parcela de 1000
+  const rid = recs[0].id;
+  const p1 = await c.rpc("fn_receber_parcela", { p_receivable_id: rid, p_valor: 400, p_idem: uniq("i"), p_forma: "Pix", p_conta: CONTA, p_operadora: null });
+  assert.ok(!p1.error, p1.error?.message);
+  const p2 = await c.rpc("fn_receber_parcela", { p_receivable_id: rid, p_valor: 600, p_idem: uniq("i"), p_forma: "Pix", p_conta: CONTA, p_operadora: null });
+  assert.ok(!p2.error, p2.error?.message);
+  const { data: st } = await c.from("receivables").select("status").eq("id", rid).single();
+  assert.equal(st.status, "RECEBIDO");
+  const { data: cash } = await c.from("cash_movements").select("id").eq("origem_id", rid).eq("origem_tipo", "recebimento");
+  assert.equal(cash.length, 2, "um caixa por recebimento");
+  await limpar(c, saleId);
+});
+
+test("11. over-recebimento é rejeitado (saldo nunca negativo)", { skip }, async () => {
+  const c = await admin();
+  const { saleId, recs } = await vendaComParcela(c, 500, 0, 1);
+  const rid = recs[0].id;
+  const r = await c.rpc("fn_receber_parcela", { p_receivable_id: rid, p_valor: 999, p_idem: uniq("i"), p_forma: "Pix", p_conta: CONTA, p_operadora: null });
+  assert.ok(r.error, "recebimento acima do saldo deve falhar");
+  await limpar(c, saleId);
+});
+
+test("12. estorno de recebimento gera saída e reabre a parcela", { skip }, async () => {
+  const c = await admin();
+  const { saleId, recs } = await vendaComParcela(c, 400, 0, 1);
+  const rid = recs[0].id;
+  await c.rpc("fn_receber_parcela", { p_receivable_id: rid, p_valor: 400, p_idem: uniq("i"), p_forma: "Pix", p_conta: CONTA, p_operadora: null });
+  const { data: pay } = await c.from("receivable_payments").select("id").eq("receivable_id", rid).eq("estornado", false).single();
+  const e = await c.rpc("fn_estornar_recebimento", { p_payment_id: pay.id });
+  assert.ok(!e.error, e.error?.message);
+  const { data: st } = await c.from("receivables").select("status").eq("id", rid).single();
+  assert.equal(st.status, "ABERTO", "parcela reaberta");
+  const { data: saida } = await c.from("cash_movements").select("id").eq("origem_tipo", "estorno_receb").eq("origem_id", pay.id);
+  assert.equal(saida.length, 1, "movimento inverso (saída)");
+  // idempotência do estorno
+  const e2 = await c.rpc("fn_estornar_recebimento", { p_payment_id: pay.id });
+  assert.equal(e2.data?.idempotent, true);
+  await limpar(c, saleId);
+});
+
+test("13. contas a pagar: pagamento parcial + estorno, UM caixa cada", { skip }, async () => {
+  const c = await admin();
+  const { data: pb } = await c.from("payables").insert({
+    organization_id: ORG, store_id: LOJA_MANTIQUEIRA, descricao: uniq("Despesa"), valor: 300, created_by: (await c.auth.getUser()).data.user.id,
+  }).select("id").single();
+  const pay = await c.rpc("fn_pagar_conta", { p_payable_id: pb.id, p_valor: 200, p_idem: uniq("i"), p_forma: "Pix", p_conta_fin: CONTA });
+  assert.ok(!pay.error, pay.error?.message);
+  const over = await c.rpc("fn_pagar_conta", { p_payable_id: pb.id, p_valor: 500, p_idem: uniq("i"), p_forma: "Pix", p_conta_fin: CONTA });
+  assert.ok(over.error, "pagamento acima do saldo deve falhar");
+  const { data: pp } = await c.from("payable_payments").select("id").eq("payable_id", pb.id).eq("estornado", false).single();
+  const est = await c.rpc("fn_estornar_pagamento", { p_payment_id: pp.id });
+  assert.ok(!est.error, est.error?.message);
+  const { data: entrada } = await c.from("cash_movements").select("id").eq("origem_tipo", "estorno_pgto").eq("origem_id", pp.id);
+  assert.equal(entrada.length, 1, "estorno de pagamento gera entrada");
+  await c.from("cash_movements").delete().eq("origem_id", pb.id);
+  await c.from("cash_movements").delete().eq("origem_id", pp.id);
+  await c.from("payable_payments").delete().eq("payable_id", pb.id);
+  await c.from("payables").delete().eq("id", pb.id);
+});

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, LogOut, Plus, Search, ChevronDown, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
+import { meuResumo } from "@/lib/data/server-ctx";
 import { useNav } from "./app-shell";
 import {
   DropdownMenu,
@@ -18,9 +20,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+function iniciais(nome: string): string {
+  const p = nome.trim().split(/\s+/).filter(Boolean);
+  if (!p.length) return "U";
+  return ((p[0][0] || "") + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
+}
+
 export function Topbar() {
   const router = useRouter();
   const { openMobile } = useNav();
+  const [user, setUser] = useState<{ nome: string; email: string; roleNome: string; lojas: string[] }>({
+    nome: "Usuário", email: "", roleNome: "", lojas: [],
+  });
+
+  useEffect(() => {
+    if (hasSupabaseEnv()) meuResumo().then(setUser).catch(() => {});
+  }, []);
 
   async function sair() {
     if (hasSupabaseEnv()) {
@@ -67,20 +82,23 @@ export function Topbar() {
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-accent">
               <Avatar>
-                <AvatarFallback>CM</AvatarFallback>
+                <AvatarFallback>{iniciais(user.nome)}</AvatarFallback>
               </Avatar>
               <span className="hidden text-sm font-medium sm:inline">
-                Carla Mendes
+                {user.nome}
               </span>
               <ChevronDown className="hidden h-4 w-4 text-muted-foreground sm:inline" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-64">
             <DropdownMenuLabel>
-              <p className="text-sm font-medium">Carla Mendes</p>
-              <p className="text-xs font-normal text-muted-foreground">
-                carla@vidraria.com
-              </p>
+              <p className="text-sm font-medium">{user.nome}</p>
+              {user.email && <p className="text-xs font-normal text-muted-foreground">{user.email}</p>}
+              {(user.roleNome || user.lojas.length > 0) && (
+                <p className="mt-1 text-xs font-normal text-muted-foreground">
+                  {user.roleNome}{user.lojas.length ? ` · ${user.lojas.join(", ")}` : ""}
+                </p>
+              )}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => router.push("/configuracoes")}>

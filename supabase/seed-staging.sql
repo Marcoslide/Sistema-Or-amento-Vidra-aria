@@ -65,15 +65,26 @@ insert into role_permissions(organization_id,role_id,permission_key) values
  ('00000000-0000-0000-0000-000000000001','vendedor','fin.ver_valores'),
  ('00000000-0000-0000-0000-000000000001','vendedor','prod.ver')
 on conflict do nothing;
--- financeiro
+-- financeiro (App 4)
+insert into permissions(key,descricao) values
+ ('fin.centro_custos','Centro de custos'),('fin.ponto_equilibrio','Ponto de equilíbrio'),('fin.custos_venda','Custos por venda')
+on conflict (key) do nothing;
 insert into role_permissions(organization_id,role_id,permission_key) values
  ('00000000-0000-0000-0000-000000000001','financeiro','fin.ver_valores'),
+ ('00000000-0000-0000-0000-000000000001','financeiro','fin.ver_custos'),
+ ('00000000-0000-0000-0000-000000000001','financeiro','fin.ver_margem'),
  ('00000000-0000-0000-0000-000000000001','financeiro','fin.contas_pagar'),
  ('00000000-0000-0000-0000-000000000001','financeiro','fin.contas_receber'),
  ('00000000-0000-0000-0000-000000000001','financeiro','fin.baixar'),
  ('00000000-0000-0000-0000-000000000001','financeiro','fin.estornar'),
- ('00000000-0000-0000-0000-000000000001','financeiro','fin.caixa')
+ ('00000000-0000-0000-0000-000000000001','financeiro','fin.caixa'),
+ ('00000000-0000-0000-0000-000000000001','financeiro','fin.centro_custos'),
+ ('00000000-0000-0000-0000-000000000001','financeiro','fin.ponto_equilibrio'),
+ ('00000000-0000-0000-0000-000000000001','financeiro','fin.custos_venda')
 on conflict do nothing;
+-- admin recebe as permissões novas também (idempotente)
+insert into role_permissions(organization_id,role_id,permission_key)
+ select '00000000-0000-0000-0000-000000000001','admin',key from permissions on conflict do nothing;
 
 -- ---------- Vendedor (para "vendedor automático" e isolamento) ----------
 insert into sellers(id,organization_id,nome,email,tel,desc_max,meta,comissao,ativo) values

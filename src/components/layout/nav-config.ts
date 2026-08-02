@@ -11,6 +11,14 @@ import {
   Tags,
   Truck,
   ShieldCheck,
+  Wallet,
+  ArrowLeftRight,
+  Receipt,
+  Target,
+  Building2,
+  Clock,
+  Cog,
+  TrendingDown,
   type LucideIcon,
 } from "lucide-react";
 import { filtrarNav } from "@/lib/permissions";
@@ -51,6 +59,24 @@ export const navGroups: NavGroup[] = [
       { label: "Fornecedores", href: "/fornecedores", icon: Truck },
       { label: "Contas de Recebimento", href: "/contas", icon: Landmark },
       { label: "Operadoras de Cartão", href: "/operadoras", icon: CreditCard },
+    ],
+  },
+  {
+    title: "Financeiro",
+    items: [
+      { label: "Contas a Receber", href: "/financeiro/receber", icon: Wallet, perm: "fin.contas_receber" },
+      { label: "Caixa", href: "/financeiro/caixa", icon: ArrowLeftRight, perm: "fin.caixa" },
+      { label: "Contas a Pagar", href: "/financeiro/pagar", icon: Receipt, perm: "fin.contas_pagar" },
+      { label: "Ponto de Equilíbrio", href: "/financeiro/ponto-equilibrio", icon: Target, perm: "fin.ponto_equilibrio" },
+    ],
+  },
+  {
+    title: "Custos",
+    items: [
+      { label: "Centro de Custos", href: "/centro-custos", icon: Building2, perm: "fin.centro_custos" },
+      { label: "Hora-Homem", href: "/hora-homem", icon: Clock, perm: "fin.ver_custos" },
+      { label: "Hora-Máquina", href: "/hora-maquina", icon: Cog, perm: "fin.ver_custos" },
+      { label: "Depreciação", href: "/depreciacao", icon: TrendingDown, perm: "fin.ver_custos" },
     ],
   },
   {
