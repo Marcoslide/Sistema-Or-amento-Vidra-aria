@@ -1,24 +1,21 @@
 import {
   LayoutDashboard,
-  Users,
-  Package,
-  FileText,
-  UserCog,
+  Tag,
+  HardHat,
+  Calendar,
+  AlertTriangle,
   Landmark,
-  CreditCard,
-  Settings,
-  Store,
+  Receipt,
+  ArrowLeftRight,
+  Layers,
+  Percent,
+  BarChart3,
+  Users,
+  UserCog,
+  Package,
   Tags,
   Truck,
-  ShieldCheck,
-  Wallet,
-  ArrowLeftRight,
-  Receipt,
-  Target,
-  Building2,
-  Clock,
-  Cog,
-  TrendingDown,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 import { filtrarNav } from "@/lib/permissions";
@@ -27,64 +24,55 @@ export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
-  perm?: string;        // permissão exigida; se ausente, item é público (autenticado)
+  perm?: string;
 }
-
 export interface NavGroup {
   title: string;
   items: NavItem[];
 }
 
-// Filtra o menu conforme as permissões do usuário (lógica pura em @/lib/permissions).
-export function filterNav(groups: NavGroup[], perms: string[]): NavGroup[] {
-  return filtrarNav(groups, perms) as NavGroup[];
-}
-
+// Menu conforme o CONTRATO V6 (grupos, ordem e nomes). Guards de permissão mantidos por baixo.
 export const navGroups: NavGroup[] = [
+  {
+    title: "Visão geral",
+    items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }],
+  },
+  {
+    title: "Comercial",
+    items: [{ label: "Vendas", href: "/orcamentos", icon: Tag }],
+  },
   {
     title: "Operação",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Orçamentos", href: "/orcamentos", icon: FileText },
-      { label: "Clientes", href: "/clientes", icon: Users },
-      { label: "Produtos", href: "/produtos", icon: Package },
-    ],
-  },
-  {
-    title: "Cadastros",
-    items: [
-      { label: "Lojas e operações", href: "/lojas", icon: Store },
-      { label: "Vendedores", href: "/vendedores", icon: UserCog },
-      { label: "Famílias", href: "/familias", icon: Tags },
-      { label: "Fornecedores", href: "/fornecedores", icon: Truck },
-      { label: "Contas de Recebimento", href: "/contas", icon: Landmark },
-      { label: "Operadoras de Cartão", href: "/operadoras", icon: CreditCard },
+      { label: "Obras", href: "/obras", icon: HardHat, perm: "obras.ver" },
+      { label: "Agenda", href: "/agenda", icon: Calendar },
+      { label: "Reclamações", href: "/reclamacoes", icon: AlertTriangle },
     ],
   },
   {
     title: "Financeiro",
     items: [
-      { label: "Contas a Receber", href: "/financeiro/receber", icon: Wallet, perm: "fin.contas_receber" },
+      { label: "Contas a receber", href: "/financeiro/receber", icon: Landmark, perm: "fin.contas_receber" },
+      { label: "Contas a pagar", href: "/financeiro/pagar", icon: Receipt, perm: "fin.contas_pagar" },
       { label: "Caixa", href: "/financeiro/caixa", icon: ArrowLeftRight, perm: "fin.caixa" },
-      { label: "Contas a Pagar", href: "/financeiro/pagar", icon: Receipt, perm: "fin.contas_pagar" },
-      { label: "Ponto de Equilíbrio", href: "/financeiro/ponto-equilibrio", icon: Target, perm: "fin.ponto_equilibrio" },
+      { label: "Centro de custos", href: "/centro-custos", icon: Layers, perm: "fin.centro_custos" },
+      { label: "Ponto de equilíbrio", href: "/financeiro/ponto-equilibrio", icon: Percent, perm: "fin.ponto_equilibrio" },
+      { label: "Análise por venda", href: "/analise", icon: BarChart3, perm: "fin.ver_margem" },
     ],
   },
   {
-    title: "Custos",
+    title: "Cadastros",
     items: [
-      { label: "Centro de Custos", href: "/centro-custos", icon: Building2, perm: "fin.centro_custos" },
-      { label: "Hora-Homem", href: "/hora-homem", icon: Clock, perm: "fin.ver_custos" },
-      { label: "Hora-Máquina", href: "/hora-maquina", icon: Cog, perm: "fin.ver_custos" },
-      { label: "Depreciação", href: "/depreciacao", icon: TrendingDown, perm: "fin.ver_custos" },
-    ],
-  },
-  {
-    title: "Sistema",
-    items: [
-      { label: "Usuários", href: "/usuarios", icon: Users, perm: "adm.usuarios" },
-      { label: "Perfis e permissões", href: "/perfis", icon: ShieldCheck, perm: "adm.config" },
-      { label: "Configurações", href: "/configuracoes", icon: Settings, perm: "adm.config" },
+      { label: "Clientes", href: "/clientes", icon: Users },
+      { label: "Vendedores", href: "/vendedores", icon: UserCog },
+      { label: "Produtos", href: "/produtos", icon: Package },
+      { label: "Famílias", href: "/familias", icon: Tags },
+      { label: "Fornecedores", href: "/fornecedores", icon: Truck },
+      { label: "Operadoras", href: "/operadoras", icon: CreditCard },
     ],
   },
 ];
+
+export function filterNav(groups: NavGroup[], perms: string[]): NavGroup[] {
+  return filtrarNav(groups, perms) as NavGroup[];
+}

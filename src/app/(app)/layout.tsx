@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import "@/styles/v6-shell.css";
 import { AppShell } from "@/components/layout/app-shell";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
