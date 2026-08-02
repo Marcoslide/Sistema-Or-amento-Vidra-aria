@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Printer, ArrowRight, Wallet } from "lucide-react";
+import { Printer, ArrowRight, Wallet, Factory } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { OrcamentoBuilder } from "@/components/comercial/orcamento-builder";
 import { TransformarModal } from "@/components/comercial/transformar-modal";
 import { getVenda, getHistorico, type VendaFull, type HistoricoRow } from "@/lib/data/vendas-core";
 import { mudarSituacao } from "@/lib/data/vendas-actions";
+import { iniciarProducao } from "@/lib/data/producao-actions";
 import { labelSituacao, variantSituacao, SITUACAO_PROXIMAS } from "@/lib/commercial/situacao";
 import { formatCurrency, formatDate } from "@/lib/format";
 
@@ -50,6 +51,13 @@ export default function VendaPage() {
     else setErro(res.error || "Falha ao atualizar situação.");
   }
 
+  async function iniciarProd() {
+    setMsg(""); setErro("");
+    const res = await iniciarProducao(params.id);
+    if (res.ok) router.push(`/producao/${res.id}`);
+    else setErro(res.error || "Falha ao iniciar produção.");
+  }
+
   if (loading) return <div className="py-10 text-center text-muted-foreground">Carregando...</div>;
   if (!venda) return (
     <div className="space-y-4">
@@ -72,6 +80,9 @@ export default function VendaPage() {
       {venda.venda_gerada && (
         <>
           <PageHeader title={`Venda #${venda.numero ?? ""}`} description={`${venda.cliente_nome} — ${formatCurrency(venda.total)}`}>
+            {venda.situacao === "VENDA_CONFIRMADA" && (
+              <Button variant="outline" className="gap-1.5" onClick={iniciarProd}><Factory className="h-4 w-4" /> Iniciar produção</Button>
+            )}
             <Button asChild variant="outline" className="gap-1.5"><Link href={`/orcamentos/${venda.id}/financeiro`}><Wallet className="h-4 w-4" /> Financeiro</Link></Button>
             <Button asChild variant="outline" className="gap-1.5"><Link href={`/orcamentos/${venda.id}/pdf`}><Printer className="h-4 w-4" /> PDF</Link></Button>
           </PageHeader>

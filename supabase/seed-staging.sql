@@ -82,6 +82,31 @@ insert into role_permissions(organization_id,role_id,permission_key) values
  ('00000000-0000-0000-0000-000000000001','financeiro','fin.ponto_equilibrio'),
  ('00000000-0000-0000-0000-000000000001','financeiro','fin.custos_venda')
 on conflict do nothing;
+-- produção (App 5)
+insert into permissions(key,descricao) values
+ ('prod.iniciar','Iniciar produção'),('prod.apontar','Apontar produção'),
+ ('prod.terceirizar','Gerenciar terceirizações'),('prod.conferir','Conferência'),('prod.expedir','Expedição')
+on conflict (key) do nothing;
+insert into roles(id,organization_id,nome) values
+ ('producao','00000000-0000-0000-0000-000000000001','Produção')
+on conflict do nothing;
+-- perfil produção: chão de fábrica, SEM valores financeiros
+insert into role_permissions(organization_id,role_id,permission_key) values
+ ('00000000-0000-0000-0000-000000000001','producao','prod.ver'),
+ ('00000000-0000-0000-0000-000000000001','producao','prod.iniciar'),
+ ('00000000-0000-0000-0000-000000000001','producao','prod.apontar'),
+ ('00000000-0000-0000-0000-000000000001','producao','prod.terceirizar'),
+ ('00000000-0000-0000-0000-000000000001','producao','prod.conferir'),
+ ('00000000-0000-0000-0000-000000000001','producao','prod.concluir')
+on conflict do nothing;
+-- gerente também acompanha e conclui produção
+insert into role_permissions(organization_id,role_id,permission_key) values
+ ('00000000-0000-0000-0000-000000000001','gerente','prod.iniciar'),
+ ('00000000-0000-0000-0000-000000000001','gerente','prod.apontar'),
+ ('00000000-0000-0000-0000-000000000001','gerente','prod.terceirizar'),
+ ('00000000-0000-0000-0000-000000000001','gerente','prod.conferir'),
+ ('00000000-0000-0000-0000-000000000001','gerente','prod.concluir')
+on conflict do nothing;
 -- admin recebe as permissões novas também (idempotente)
 insert into role_permissions(organization_id,role_id,permission_key)
  select '00000000-0000-0000-0000-000000000001','admin',key from permissions on conflict do nothing;

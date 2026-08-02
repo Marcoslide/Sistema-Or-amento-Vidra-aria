@@ -19,6 +19,7 @@ import {
   Clock,
   Cog,
   TrendingDown,
+  Factory,
   type LucideIcon,
 } from "lucide-react";
 import { filtrarNav } from "@/lib/permissions";
@@ -48,6 +49,7 @@ export const navGroups: NavGroup[] = [
       { label: "Orçamentos", href: "/orcamentos", icon: FileText },
       { label: "Clientes", href: "/clientes", icon: Users },
       { label: "Produtos", href: "/produtos", icon: Package },
+      { label: "Produção", href: "/producao", icon: Factory, perm: "prod.ver" },
     ],
   },
   {
