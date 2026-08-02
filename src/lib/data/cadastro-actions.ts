@@ -61,6 +61,12 @@ const REG: Record<string, EntityDef> = {
     table: "card_operators", label: "operadora", deletePerm: "fin.excluir_operadoras", storeScoped: true,
     vinculos: [{ table: "receivable_payments", col: "operadora", byName: true, label: "recebimentos" }],
   },
+  "categorias-financeiras": {
+    table: "financial_categories", label: "categoria financeira", deletePerm: "fin.excluir_categorias",
+    vinculos: [
+      { table: "payables", col: "categoria", byName: true, label: "contas a pagar" },
+    ],
+  },
   produtos: {
     table: "products", label: "produto", deletePerm: "cad.excluir_produtos",
     nameCol: "descricao",

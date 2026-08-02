@@ -10,6 +10,7 @@ import {
   Layers,
   Percent,
   BarChart3,
+  FolderTree,
   Users,
   UserCog,
   Package,
@@ -58,6 +59,7 @@ export const navGroups: NavGroup[] = [
       { label: "Centro de custos", href: "/centro-custos", icon: Layers, perm: "fin.centro_custos" },
       { label: "Ponto de equilíbrio", href: "/financeiro/ponto-equilibrio", icon: Percent, perm: "fin.ponto_equilibrio" },
       { label: "Análise por venda", href: "/analise", icon: BarChart3, perm: "fin.ver_margem" },
+      { label: "Categorias", href: "/categorias-financeiras", icon: FolderTree, perm: "fin.contas_pagar" },
     ],
   },
   {
