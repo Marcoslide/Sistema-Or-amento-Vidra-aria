@@ -48,16 +48,26 @@ async function minhaOrganizacao(): Promise<string | null> {
   return (data?.organization_id as string) || null;
 }
 
+export type NovoClienteInput = {
+  nome: string; doc?: string; email?: string; tel?: string;
+  cep?: string; logradouro?: string; numero?: string; complemento?: string;
+  bairro?: string; cidade?: string; uf?: string; storeId?: string | null;
+};
+
 // Cria cliente (organização vem do perfil do usuário logado; RLS garante o isolamento).
-export async function criarCliente(input: { nome: string; doc?: string; email?: string; tel?: string; cidade?: string; uf?: string; storeId?: string }) {
+// Retorna o id criado. Erros de banco propagam como ConnectionError (sem falha silenciosa).
+export async function criarCliente(input: NovoClienteInput): Promise<string> {
   const supabase = createClient();
   const org = await minhaOrganizacao();
   if (!org) throw new ConnectionError("Usuário sem organização vinculada.");
-  const { error } = await supabase.from("customers").insert({
+  const { data, error } = await supabase.from("customers").insert({
     organization_id: org,
     store_id: input.storeId || null,
-    nome: input.nome, doc: input.doc || null, email: input.email || null,
-    tel: input.tel || null, cidade: input.cidade || null, uf: input.uf || null,
-  });
+    nome: input.nome, doc: input.doc || null, email: input.email || null, tel: input.tel || null,
+    cep: input.cep || null, logradouro: input.logradouro || null, numero: input.numero || null,
+    complemento: input.complemento || null, bairro: input.bairro || null,
+    cidade: input.cidade || null, uf: input.uf || null,
+  }).select("id").single();
   if (error) throw new ConnectionError("Não foi possível salvar o cliente: " + error.message);
+  return data.id as string;
 }

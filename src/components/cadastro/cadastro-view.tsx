@@ -174,8 +174,9 @@ export function CadastroView(props: {
           )}
         </div>
 
+        <p className="px-4 pt-2 text-[11px] text-muted-foreground sm:hidden">← deslize para ver preço, status e ações →</p>
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-[680px]">
             <TableHeader><TableRow>
               <TableHead className="w-10 pl-4"></TableHead>
               {props.columns.map((c) => <TableHead key={c.key} className={c.align === "right" ? "text-right" : ""}>{c.label}</TableHead>)}

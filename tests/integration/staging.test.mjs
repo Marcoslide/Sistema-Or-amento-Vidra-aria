@@ -95,6 +95,21 @@ test("4. isolamento por vendedor (RLS)", { skip }, async () => {
   await cadmin.from("sales").delete().eq("id", venda.id);
 });
 
+// ---------- 4b. Regressão do erro de subquery (app_store_ids) em org com 2 lojas ----------
+test("4b. admin salva venda em org com 2 lojas (sem erro de subquery)", { skip }, async () => {
+  const c = await admin();
+  const { data: a } = await c.auth.getUser();
+  // Antes da correção, o RLS with_check avaliava app_store_ids() como subquery escalar
+  // e falhava com "more than one row returned by a subquery" (org tem 2 lojas).
+  const { data: v, error } = await c.from("sales").insert({
+    organization_id: ORG, store_id: LOJA_MANTIQUEIRA, cliente_nome: uniq("Regressao"),
+    status: "ORCAMENTO", situacao: "ORCAMENTO", created_by: a.user.id, total: 0,
+  }).select("id").single();
+  assert.ok(!error, error?.message);
+  assert.ok(v?.id, "venda inserida com RLS ativa (app_store_ids retorna conjunto)");
+  await c.from("sales").delete().eq("id", v.id);
+});
+
 // ---------- 5. Criar orçamento + MOLDURA 40×60 = 2,40 m ----------
 test("5. orçamento com MOLDURA 40×60 = 2,40 m", { skip }, async () => {
   const c = await admin();

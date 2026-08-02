@@ -19,6 +19,7 @@ export type UsuariosData = {
 
 export async function getUsuariosData(): Promise<UsuariosData> {
   const c = await getCtx();
+  if (!(await ctxHasPerm(c, "adm.usuarios"))) throw new Error("Sem permissão para acessar Usuários.");
   const [{ data: profs }, { data: us }, { data: roles }, { data: stores }, { data: sellers }] = await Promise.all([
     c.supabase.from("profiles").select("id,nome,email,role_id,seller_id,status").eq("organization_id", c.org).order("nome"),
     c.supabase.from("user_stores").select("user_id,store_id"),

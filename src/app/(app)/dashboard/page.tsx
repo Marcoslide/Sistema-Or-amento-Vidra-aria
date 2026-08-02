@@ -79,6 +79,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Aviso: o Dashboard ainda não lê do banco de homologação (dados de demonstração). */}
+      <div className="flex items-start gap-3 rounded-lg border border-amber-400/50 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <span className="mt-0.5 rounded bg-amber-200 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide">Demonstração</span>
+        <p>
+          <strong>Dados de demonstração.</strong> Este painel ainda não está conectado ao banco de
+          homologação — os números abaixo são fictícios. Os módulos de Cadastros e Comercial já usam dados reais.
+        </p>
+      </div>
+
       <PageHeader
         title="Dashboard"
         description="Visão geral do seu fluxo de orçamentos e obras."

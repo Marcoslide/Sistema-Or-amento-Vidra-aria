@@ -18,14 +18,18 @@ language sql stable security definer set search_path=public as $$
   );
 $$;
 
--- lojas que o usuário enxerga: todas da org se multiloja/vendas.todas, senão as vinculadas
+-- lojas que o usuário enxerga: todas da org se multiloja/vendas.todas, senão as vinculadas.
+-- IMPORTANTE: retornar um CONJUNTO (setof) via UNION — nunca subquery escalar dentro de CASE,
+-- que quebra com "more than one row returned by a subquery" quando a org tem várias lojas.
 create or replace function app_store_ids() returns setof uuid
 language sql stable security definer set search_path=public as $$
-  select case
-    when app_has_perm('adm.multiloja') or app_has_perm('vendas.todas')
-      then (select id from stores where organization_id = app_org_id())
-    else (select store_id from user_stores where user_id = auth.uid())
-  end;
+  select id from stores
+    where organization_id = app_org_id()
+      and (app_has_perm('adm.multiloja') or app_has_perm('vendas.todas'))
+  union
+  select store_id from user_stores
+    where user_id = auth.uid()
+      and not (app_has_perm('adm.multiloja') or app_has_perm('vendas.todas'));
 $$;
 
 -- vendedor "restrito": vê só as próprias vendas (tem vendas.proprias e NÃO tem loja/todas)
