@@ -97,6 +97,7 @@ export default function VendaPdfPage() {
         {/* cliente */}
         <div className="border-b py-3 text-sm">
           <p><span className="font-semibold">Cliente:</span> {venda.cliente_nome}</p>
+          {venda.obra_nome && <p><span className="font-semibold">Obra:</span> {venda.obra_nome}{venda.obra_endereco ? ` — ${venda.obra_endereco}` : ""}</p>}
           {venda.vend_nome && <p><span className="font-semibold">Vendedor:</span> {venda.vend_nome}</p>}
         </div>
 

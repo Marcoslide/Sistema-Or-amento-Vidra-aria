@@ -11,6 +11,7 @@ export type AmbienteIn = { nome: string; itens: ItemIn[] };
 export type OrcamentoIn = {
   store_id: string; cliente_id: string | null; cliente_nome: string;
   seller_id: string | null; vend_nome: string;
+  obra_nome?: string; obra_endereco?: string;
   desc_pct?: number; acrescimo?: number; frete?: number; instalacao?: number;
   obs?: string; obs_interna?: string; prazo_dias?: number | null; condicao?: unknown;
   ambientes: AmbienteIn[];
@@ -103,6 +104,7 @@ export async function salvarOrcamento(id: string | null, orc: OrcamentoIn): Prom
     const base = {
       organization_id: c.org, store_id: orc.store_id,
       cliente_id: orc.cliente_id, cliente_nome: orc.cliente_nome, seller_id: orc.seller_id, vend_nome: orc.vend_nome,
+      obra_nome: orc.obra_nome || null, obra_endereco: orc.obra_endereco || null,
       desc_pct: orc.desc_pct || 0, acrescimo: orc.acrescimo || 0, frete: orc.frete || 0, instalacao: orc.instalacao || 0,
       obs: orc.obs || null, obs_interna: orc.obs_interna || null, prazo_dias: orc.prazo_dias ?? null,
       condicao: orc.condicao ?? null, total, custo_prev: custo, margem_prev: margem,
@@ -150,6 +152,7 @@ export async function duplicarOrcamento(id: string): Promise<R> {
     return salvarOrcamento(null, {
       store_id: o.store_id as string, cliente_id: o.cliente_id as string | null, cliente_nome: (o.cliente_nome as string) + " (cópia)",
       seller_id: o.seller_id as string | null, vend_nome: o.vend_nome as string,
+      obra_nome: (o.obra_nome as string) || undefined, obra_endereco: (o.obra_endereco as string) || undefined,
       desc_pct: Number(o.desc_pct), acrescimo: Number(o.acrescimo), frete: Number(o.frete), instalacao: Number(o.instalacao),
       obs: o.obs as string, obs_interna: o.obs_interna as string, prazo_dias: o.prazo_dias as number | null, condicao: o.condicao, ambientes,
     });

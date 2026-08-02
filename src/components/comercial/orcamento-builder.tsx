@@ -54,6 +54,8 @@ export function OrcamentoBuilder({ inicial }: { inicial?: VendaFull }) {
   const [storeId, setStoreId] = useState(inicial?.store_id || "");
   const [clienteId, setClienteId] = useState(inicial?.cliente_id || "");
   const [clienteNome, setClienteNome] = useState(inicial?.cliente_nome || "");
+  const [obraNome, setObraNome] = useState(inicial?.obra_nome || "");
+  const [obraEndereco, setObraEndereco] = useState(inicial?.obra_endereco || "");
   const [sellerId, setSellerId] = useState(inicial?.seller_id || "");
   const [vendNome, setVendNome] = useState(inicial?.vend_nome || "");
   const [descPct, setDescPct] = useState(String(inicial?.desc_pct ?? 0));
@@ -146,6 +148,7 @@ export function OrcamentoBuilder({ inicial }: { inicial?: VendaFull }) {
     const payload: OrcamentoIn = {
       store_id: storeId, cliente_id: clienteId || null, cliente_nome: clienteNome.trim(),
       seller_id: sellerId || null, vend_nome: vendNome,
+      obra_nome: obraNome.trim() || undefined, obra_endereco: obraEndereco.trim() || undefined,
       desc_pct: num(descPct), acrescimo: num(acrescimo), frete: num(frete), instalacao: num(instalacao),
       obs, obs_interna: obsInterna, prazo_dias: prazo.trim() !== "" ? Math.trunc(num(prazo)) : null,
       condicao: condicao.trim() || null,
@@ -226,6 +229,14 @@ export function OrcamentoBuilder({ inicial }: { inicial?: VendaFull }) {
                 <option value="">— sem vendedor —</option>
                 {vendedores.map((v) => (<option key={v.id} value={v.id}>{v.nome}</option>))}
               </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Obra</Label>
+              <Input placeholder="Nome da obra (opcional)" value={obraNome} onChange={(e) => setObraNome(e.target.value)} />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label>Endereço da obra</Label>
+              <Input placeholder="Endereço da obra (opcional)" value={obraEndereco} onChange={(e) => setObraEndereco(e.target.value)} />
             </div>
           </CardContent>
         </Card>

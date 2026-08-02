@@ -128,6 +128,7 @@ export type VendaFull = {
   id: string; numero: number | null; situacao: string; status: string; venda_gerada: boolean;
   store_id: string; cliente_id: string | null; cliente_nome: string;
   seller_id: string | null; vend_nome: string;
+  obra_nome: string; obra_endereco: string;
   desc_pct: number; acrescimo: number; frete: number; instalacao: number;
   obs: string; obs_interna: string; prazo_dias: number | null; condicao: unknown;
   total: number; custo_prev: number; margem_prev: number; created_at: string;
@@ -178,6 +179,7 @@ export async function getVenda(id: string): Promise<VendaFull | null> {
     venda_gerada: Boolean(o.venda_gerada), store_id: o.store_id as string,
     cliente_id: (o.cliente_id as string) || null, cliente_nome: (o.cliente_nome as string) || "",
     seller_id: (o.seller_id as string) || null, vend_nome: (o.vend_nome as string) || "",
+    obra_nome: (o.obra_nome as string) || "", obra_endereco: (o.obra_endereco as string) || "",
     desc_pct: Number(o.desc_pct) || 0, acrescimo: Number(o.acrescimo) || 0,
     frete: Number(o.frete) || 0, instalacao: Number(o.instalacao) || 0,
     obs: (o.obs as string) || "", obs_interna: (o.obs_interna as string) || "",
