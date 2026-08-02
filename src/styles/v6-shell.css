@@ -86,6 +86,45 @@
 .v6-shell .v6-tbl td { padding: 9px 8px; border-bottom: 1px solid var(--v6-border-2, #eef2f7); }
 .v6-shell .v6-demo-off { display: none; }
 
+/* ---------- Formulários (paridade V6: .inp / .lbl / grid) ---------- */
+.v6-shell .v6-lbl { display: block; font-size: 12px; font-weight: 600; color: var(--v6-muted); margin-bottom: 5px; }
+.v6-shell .v6-inp { width: 100%; height: 38px; border: 1px solid var(--v6-border); border-radius: 9px; padding: 0 11px; background: var(--v6-card); font-size: 13.5px; color: var(--v6-fg); outline: none; transition: border-color .15s, box-shadow .15s; }
+.v6-shell textarea.v6-inp { height: auto; padding: 9px 11px; resize: vertical; }
+.v6-shell .v6-inp:focus { border-color: var(--v6-primary); box-shadow: 0 0 0 3px var(--v6-primary-soft); }
+.v6-shell select.v6-inp { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px; }
+.v6-shell .v6-g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.v6-shell .v6-g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.v6-shell .v6-col-span { grid-column: 1 / -1; }
+.v6-shell .v6-field-err { font-size: 11.5px; color: #dc2626; margin-top: 4px; }
+.v6-shell .v6-hint { font-size: 12px; color: var(--v6-muted); }
+@media (max-width: 720px) { .v6-shell .v6-g2, .v6-shell .v6-g3 { grid-template-columns: 1fr; } }
+
+/* ---------- Botões secundários ---------- */
+.v6-shell .v6-btn-outline { background: var(--v6-card); color: var(--v6-fg); border-color: var(--v6-border); }
+.v6-shell .v6-btn-outline:hover { background: #f8fafc; }
+.v6-shell .v6-btn-ghost { background: transparent; color: var(--v6-muted); }
+.v6-shell .v6-btn-ghost:hover { background: #f1f5f9; }
+.v6-shell .v6-btn-sm { height: 32px; padding: 0 11px; font-size: 12.5px; }
+.v6-shell .v6-btn-danger { background: #fef2f2; color: #dc2626; border-color: #fca5a5; }
+.v6-shell .v6-btn-danger:hover { background: #fee2e2; }
+
+/* ---------- Badges ---------- */
+.v6-shell .v6-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+.v6-shell .v6-badge-success { background: #dcfce7; color: #15803d; }
+.v6-shell .v6-badge-muted { background: #f1f5f9; color: #64748b; }
+
+/* ---------- Modal / diálogo (paridade V6) ---------- */
+.v6-modal-scrim { position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 200; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+.v6-modal { background: var(--v6-card); border-radius: 14px; width: 100%; max-width: 720px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.v6-modal-h { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--v6-border); font-weight: 650; }
+.v6-modal-h .v6-x { border: 0; background: transparent; font-size: 18px; cursor: pointer; color: var(--v6-muted); line-height: 1; }
+.v6-modal-b { padding: 20px; }
+.v6-modal-f { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 20px; border-top: 1px solid var(--v6-border); }
+
+/* ---------- Sidebar: logomarca configurável ---------- */
+.v6-shell .v6-brand .v6-logo img, .v6-brand .v6-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.v6-shell .v6-brand .v6-logo-img, .v6-brand .v6-logo-img { width: auto; height: 34px; max-width: 150px; object-fit: contain; display: block; }
+
 /* ---------- Mobile (drawer), igual à V6 ---------- */
 .v6-scrim { display: none; }
 @media (max-width: 960px) {

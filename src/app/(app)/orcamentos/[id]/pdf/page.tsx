@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- logomarca é data URI/URL dinâmica, incompatível com next/image */
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -11,7 +12,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { calcOrc, totalItem, qtdMedida, type Regra } from "@/lib/commercial/calc";
 import { labelSituacao } from "@/lib/commercial/situacao";
 
-type Empresa = { nome: string; cnpj: string; loja: string; cidade: string; uf: string; resp: string };
+type Empresa = { nome: string; cnpj: string; loja: string; cidade: string; uf: string; resp: string; logo: string; contato: string; rodape: string };
 type ProdInfo = { descricao: string; larguraMolduraCm: number; multiplicadorCorte: number; preco: number };
 
 export default function VendaPdfPage() {
@@ -31,13 +32,22 @@ export default function VendaPdfPage() {
       const s = createClient();
       // identidade documental: SEMPRE a loja da venda (nunca misturar lojas)
       const [{ data: org }, { data: store }] = await Promise.all([
-        s.from("organizations").select("nome,cnpj").limit(1).maybeSingle(),
-        s.from("stores").select("nome,cnpj,cidade,uf,resp").eq("id", v.store_id).maybeSingle(),
+        s.from("organizations").select("nome,fantasia,razao_social,cnpj,tel,whatsapp,email,site,logo_url,rodape").limit(1).maybeSingle(),
+        s.from("stores").select("nome,nome_comercial,cnpj,cidade,uf,resp,logo_url,tel,whatsapp,email").eq("id", v.store_id).maybeSingle(),
       ]);
+      const contatoParts = [
+        (store?.tel as string) || (org?.tel as string), (store?.whatsapp as string) || (org?.whatsapp as string),
+        (store?.email as string) || (org?.email as string), (org?.site as string),
+      ].filter(Boolean);
       setEmp({
-        nome: (org?.nome as string) || "Empresa", cnpj: (store?.cnpj as string) || (org?.cnpj as string) || "",
-        loja: (store?.nome as string) || "", cidade: (store?.cidade as string) || "", uf: (store?.uf as string) || "",
+        nome: (org?.fantasia as string) || (org?.razao_social as string) || (org?.nome as string) || "Empresa",
+        cnpj: (store?.cnpj as string) || (org?.cnpj as string) || "",
+        loja: (store?.nome_comercial as string) || (store?.nome as string) || "",
+        cidade: (store?.cidade as string) || "", uf: (store?.uf as string) || "",
         resp: (store?.resp as string) || "",
+        logo: (store?.logo_url as string) || (org?.logo_url as string) || "",
+        contato: contatoParts.join(" · "),
+        rodape: (org?.rodape as string) || "",
       });
       const ids = Array.from(new Set(v.ambientes.flatMap((a) => a.itens.map((i) => i.product_id).filter(Boolean)))) as string[];
       if (ids.length) {
@@ -79,13 +89,17 @@ export default function VendaPdfPage() {
       <div className="mx-auto max-w-3xl rounded-lg border bg-white p-8 text-black shadow-sm print:border-0 print:shadow-none">
         {/* cabeçalho da empresa (identidade da loja da venda) */}
         <div className="flex items-start justify-between border-b pb-4">
-          <div>
-            <h1 className="text-xl font-bold">{emp?.nome}</h1>
-            {emp?.loja && <p className="text-sm">{emp.loja}</p>}
-            <p className="text-sm text-neutral-600">
-              {emp?.cnpj && <>CNPJ {emp.cnpj} · </>}{emp?.cidade}{emp?.uf ? `/${emp.uf}` : ""}
-            </p>
-            {emp?.resp && <p className="text-sm text-neutral-600">Resp.: {emp.resp}</p>}
+          <div className="flex items-start gap-4">
+            {emp?.logo && <img src={emp.logo} alt={emp.nome} className="h-16 max-w-[220px] object-contain" />}
+            <div>
+              <h1 className="text-xl font-bold">{emp?.nome}</h1>
+              {emp?.loja && <p className="text-sm">{emp.loja}</p>}
+              <p className="text-sm text-neutral-600">
+                {emp?.cnpj && <>CNPJ {emp.cnpj} · </>}{emp?.cidade}{emp?.uf ? `/${emp.uf}` : ""}
+              </p>
+              {emp?.contato && <p className="text-sm text-neutral-600">{emp.contato}</p>}
+              {emp?.resp && <p className="text-sm text-neutral-600">Resp.: {emp.resp}</p>}
+            </div>
           </div>
           <div className="text-right">
             <p className="text-sm font-semibold">{venda.venda_gerada ? "PEDIDO DE VENDA" : "ORÇAMENTO"} #{venda.numero ?? ""}</p>
@@ -154,7 +168,7 @@ export default function VendaPdfPage() {
         {venda.obs && <div className="mt-2 text-sm"><span className="font-semibold">Observações:</span> {venda.obs}</div>}
 
         <p className="mt-6 border-t pt-3 text-center text-xs text-neutral-500">
-          {emp?.nome}{emp?.cnpj ? ` · CNPJ ${emp.cnpj}` : ""} — documento gerado pelo sistema.
+          {emp?.rodape || `${emp?.nome}${emp?.cnpj ? ` · CNPJ ${emp.cnpj}` : ""} — documento gerado pelo sistema.`}
         </p>
       </div>
     </div>

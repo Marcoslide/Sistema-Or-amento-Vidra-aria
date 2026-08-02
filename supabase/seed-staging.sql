@@ -26,10 +26,24 @@ insert into permissions(key,descricao) values
  ('cad.excluir_fornecedores','Excluir fornecedores'),('cad.excluir_familias','Excluir famílias')
 on conflict (key) do nothing;
 
--- ---------- Organização ----------
+-- ---------- Organização (empresa usuária) ----------
 insert into organizations(id,nome,cnpj) values
  ('00000000-0000-0000-0000-000000000001','Conceito Glass (Staging)','29.881.345/0001-83')
 on conflict (id) do nothing;
+-- Identidade configurável (migration 0006). Idempotente: só preenche o que estiver vazio.
+update organizations set
+  fantasia = coalesce(nullif(fantasia,''),'Conceito Glass'),
+  razao_social = coalesce(nullif(razao_social,''),'Conceito Glass Esquadrias e Vidros Ltda'),
+  ie = coalesce(nullif(ie,''),'ISENTO'),
+  tel = coalesce(nullif(tel,''),'(31) 99206-1818'),
+  whatsapp = coalesce(nullif(whatsapp,''),'(31) 99206-1818'),
+  cidade = coalesce(nullif(cidade,''),'Belo Horizonte'),
+  uf = coalesce(nullif(uf,''),'MG'),
+  garantia = coalesce(nullif(garantia,''),'12 meses contra defeitos de fabricação.'),
+  rodape = coalesce(nullif(rodape,''),'Conceito Glass — Esquadrias & Vidros de Alto Padrão'),
+  foro_comarca = coalesce(nullif(foro_comarca,''),'Belo Horizonte'),
+  foro_estado = coalesce(nullif(foro_estado,''),'Minas Gerais')
+where id='00000000-0000-0000-0000-000000000001';
 
 -- ---------- 2 lojas (uma comercial + uma p/ testar isolamento) ----------
 insert into stores(id,organization_id,nome,tipo,cnpj,cidade,uf,resp,ativo) values
