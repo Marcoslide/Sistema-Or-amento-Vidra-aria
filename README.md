@@ -102,7 +102,9 @@ legacy/                 # protótipo HTML congelado (fonte de verdade das regras
 
 ## Deploy / homologação
 
-- Ordem de migrations, seed, usuários de teste e checklist:
+- **MVP paridade V6** (branch `feature/paridade-v6`): migrations, seed, usuário admin e escopo:
+  [`docs/fase2/homologacao-mvp-v6.md`](docs/fase2/homologacao-mvp-v6.md).
+- Ordem de migrations, seed, usuários de teste e checklist (staging original):
   [`docs/fase2/homologacao-staging.md`](docs/fase2/homologacao-staging.md).
 - Guia Vercel + Supabase: [`deploy/DEPLOY-STAGING.md`](deploy/DEPLOY-STAGING.md).
 - Organização de branches: `claude/…` (desenvolvimento) → `staging` (homologação) →
