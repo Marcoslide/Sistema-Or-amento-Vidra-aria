@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Tag,
   HardHat,
+  Factory,
   Calendar,
   AlertTriangle,
   Landmark,
@@ -45,6 +46,7 @@ export const navGroups: NavGroup[] = [
   {
     title: "Operação",
     items: [
+      { label: "Produção", href: "/producao", icon: Factory, perm: "prod.ver" },
       { label: "Obras", href: "/obras", icon: HardHat, perm: "obras.ver" },
       { label: "Agenda", href: "/agenda", icon: Calendar },
       { label: "Reclamações", href: "/reclamacoes", icon: AlertTriangle },

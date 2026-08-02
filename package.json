@@ -11,6 +11,7 @@
     "test:calc": "node --test --experimental-strip-types tests/commercial/calc.test.ts",
     "test:fin": "node --test --experimental-strip-types tests/financial/calc.test.ts",
     "test:ui": "node --test --experimental-strip-types tests/ui/permissions.test.ts",
+    "test:producao": "node --test --experimental-strip-types tests/production/calc.test.ts",
     "test:staging": "node --test tests/integration/staging.test.mjs"
   },
   "dependencies": {
