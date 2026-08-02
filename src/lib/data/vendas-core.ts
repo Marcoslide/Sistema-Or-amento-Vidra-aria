@@ -28,6 +28,33 @@ export async function listVendas(): Promise<VendaRow[]> {
   }));
 }
 
+// ---- lista rica (paridade V6): recebido/saldo por venda + nome da loja ----
+export type VendaRica = VendaRow & { loja_nome: string; recebido: number; saldo: number };
+export async function listVendasRicas(): Promise<VendaRica[]> {
+  const s = createClient();
+  const base = await listVendas();
+  if (!base.length) return [];
+  const ids = base.map((v) => v.id);
+  const [{ data: recs }, { data: pays }, { data: stores }] = await Promise.all([
+    s.from("receivables").select("sale_id,valor").in("sale_id", ids),
+    s.from("receivable_payments").select("sale_id,valor,estornado").in("sale_id", ids),
+    s.from("stores").select("id,nome"),
+  ]);
+  const totRecBy: Record<string, number> = {};
+  (recs || []).forEach((r) => { const k = r.sale_id as string; if (k) totRecBy[k] = (totRecBy[k] || 0) + (Number(r.valor) || 0); });
+  const pagoBy: Record<string, number> = {};
+  (pays || []).forEach((p) => { const k = p.sale_id as string; if (k && !p.estornado) pagoBy[k] = (pagoBy[k] || 0) + (Number(p.valor) || 0); });
+  const lojaBy: Record<string, string> = {};
+  (stores || []).forEach((x) => { lojaBy[x.id as string] = x.nome as string; });
+  return base.map((v) => {
+    // recebido: baixas da venda; base de cobrança: títulos gerados (ou total, se ainda não houver títulos)
+    const recebido = Math.round((pagoBy[v.id] || 0) * 100) / 100;
+    const cobravel = totRecBy[v.id] != null && totRecBy[v.id] > 0 ? totRecBy[v.id] : (v.venda_gerada ? v.total : 0);
+    const saldo = Math.round(Math.max(0, cobravel - recebido) * 100) / 100;
+    return { ...v, loja_nome: lojaBy[v.store_id] || "—", recebido, saldo };
+  });
+}
+
 // ---- opções para o construtor de orçamento ----
 export type Opt = { id: string; nome: string };
 export type ProdutoOpt = {
