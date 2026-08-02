@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GalleryVerticalEnd } from "lucide-react";
-import { navGroups } from "./nav-config";
 import { cn } from "@/lib/utils";
+import { useNav } from "./app-shell";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { groups: navGroups } = useNav();
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground lg:flex print:hidden">
@@ -56,9 +57,9 @@ export function Sidebar() {
 
       <div className="border-t border-sidebar-border p-4">
         <div className="rounded-lg bg-sidebar-accent/40 p-3">
-          <p className="text-xs font-medium text-white">Versão 1.0 — Protótipo</p>
+          <p className="text-xs font-medium text-white">VidroGestor · Homologação</p>
           <p className="mt-0.5 text-[11px] text-sidebar-foreground/60">
-            Dados fictícios para validação de fluxo.
+            Ambiente de testes (staging).
           </p>
         </div>
       </div>

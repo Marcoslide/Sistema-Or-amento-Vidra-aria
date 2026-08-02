@@ -39,7 +39,12 @@ em um banco **vazio**. Todos os arquivos são idempotentes (`if not exists` / `o
 | 1 | `supabase/schema.sql` | Cria as 24 tabelas do modelo multiloja | pgcrypto (padrão no Supabase) |
 | 2 | `supabase/rls.sql` | Helpers (`app_org_id`, `app_store_ids`, `app_seller_*`) + políticas RLS | passo 1 |
 | 3 | `supabase/migrations/0001_commercial.sql` | Colunas comerciais em `sales`, `sale_status_history`, RPC `fn_transformar_venda` | passos 1 e 2 (usa `app_org_id`) |
-| 4 | `supabase/seed-staging.sql` | Seed exclusivo de staging (ver §3) | passo 1 (independe do 0001) |
+| 4 | `supabase/migrations/0002_fix_rls_store_ids.sql` | **Corretiva**: `app_store_ids()` via UNION (corrige "more than one row returned by a subquery" ao salvar venda) | passo 2 |
+| 5 | `supabase/seed-staging.sql` | Seed exclusivo de staging (ver §3) | passo 1 (independe do 0001/0002) |
+
+> Em um banco **novo** (staging recriado do zero), o `rls.sql` já traz `app_store_ids()`
+> corrigido; o `0002` é idempotente e apenas reafirma a função — rodar mesmo assim é seguro.
+> No banco de staging **já provisionado**, rode o `0002` para aplicar a correção.
 
 Verificação de aplicabilidade em banco vazio (conferida no repositório):
 - `schema.sql` cria todas as tabelas usadas depois; não referencia objeto inexistente.
@@ -55,8 +60,13 @@ Verificação de aplicabilidade em banco vazio (conferida no repositório):
 1) cole e rode:  supabase/schema.sql
 2) cole e rode:  supabase/rls.sql
 3) cole e rode:  supabase/migrations/0001_commercial.sql
-4) cole e rode:  supabase/seed-staging.sql
+4) cole e rode:  supabase/migrations/0002_fix_rls_store_ids.sql
+5) cole e rode:  supabase/seed-staging.sql
 ```
+
+> **Staging já provisionado (com o bug):** basta rodar o passo 4
+> (`0002_fix_rls_store_ids.sql`) para destravar o salvamento de orçamento. É idempotente
+> e não altera dados.
 
 Auth (uma vez): **Authentication → Providers → Email** habilitado; desative
 "Confirm email" para agilizar. Storage: bucket privado `documentos` (para lotes futuros).

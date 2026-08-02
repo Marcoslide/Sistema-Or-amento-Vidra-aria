@@ -16,6 +16,8 @@ export type PerfilData = {
 
 export async function getPerfisData(): Promise<PerfilData> {
   const c = await getCtx();
+  if (!(await ctxHasPerm(c, "adm.config")) && !(await ctxHasPerm(c, "adm.usuarios")))
+    throw new Error("Sem permissão para acessar Perfis e permissões.");
   const [{ data: roles }, { data: permissions }, { data: rolePerms }, { data: profs }, { data: myProf }] = await Promise.all([
     c.supabase.from("roles").select("id,nome,ativo").eq("organization_id", c.org).order("nome"),
     c.supabase.from("permissions").select("key,descricao").order("key"),

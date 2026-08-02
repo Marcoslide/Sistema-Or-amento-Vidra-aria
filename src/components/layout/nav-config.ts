@@ -13,16 +13,23 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
+import { filtrarNav } from "@/lib/permissions";
 
 export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
+  perm?: string;        // permissão exigida; se ausente, item é público (autenticado)
 }
 
 export interface NavGroup {
   title: string;
   items: NavItem[];
+}
+
+// Filtra o menu conforme as permissões do usuário (lógica pura em @/lib/permissions).
+export function filterNav(groups: NavGroup[], perms: string[]): NavGroup[] {
+  return filtrarNav(groups, perms) as NavGroup[];
 }
 
 export const navGroups: NavGroup[] = [
@@ -49,9 +56,9 @@ export const navGroups: NavGroup[] = [
   {
     title: "Sistema",
     items: [
-      { label: "Usuários", href: "/usuarios", icon: Users },
-      { label: "Perfis e permissões", href: "/perfis", icon: ShieldCheck },
-      { label: "Configurações", href: "/configuracoes", icon: Settings },
+      { label: "Usuários", href: "/usuarios", icon: Users, perm: "adm.usuarios" },
+      { label: "Perfis e permissões", href: "/perfis", icon: ShieldCheck, perm: "adm.config" },
+      { label: "Configurações", href: "/configuracoes", icon: Settings, perm: "adm.config" },
     ],
   },
 ];

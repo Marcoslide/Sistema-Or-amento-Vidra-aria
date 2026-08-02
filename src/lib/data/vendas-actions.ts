@@ -18,6 +18,19 @@ export type OrcamentoIn = {
 
 type Ctx = Awaited<ReturnType<typeof getCtx>>;
 
+// Não vaza erro bruto do PostgreSQL para a UI: registra o técnico no log do servidor
+// e devolve uma mensagem amigável. Casos conhecidos ganham texto específico.
+function dbErro(contexto: string, tecnico: string): string {
+  console.error(`[vendas] ${contexto}:`, tecnico); // fica só no servidor
+  if (/more than one row returned by a subquery/i.test(tecnico))
+    return "Não foi possível gravar por uma inconsistência de escopo de loja. Recarregue e tente novamente; se persistir, avise o administrador.";
+  if (/row-level security|permission denied/i.test(tecnico))
+    return "Você não tem permissão para esta operação nesta loja.";
+  if (/duplicate key|unique constraint/i.test(tecnico))
+    return "Registro duplicado. Atualize a página e tente novamente.";
+  return "Não foi possível concluir a operação. Tente novamente; se persistir, avise o administrador.";
+}
+
 // monta o objeto de cálculo (puro) com os produtos reais, para totais/custo/margem no servidor
 async function montarCalc(c: Ctx, orc: OrcamentoIn): Promise<OrcamentoCalc> {
   const ids = Array.from(new Set(orc.ambientes.flatMap((a) => a.itens.map((i) => i.product_id).filter(Boolean)))) as string[];
@@ -51,18 +64,21 @@ async function validarLoja(c: Ctx, storeId: string): Promise<string | null> {
 
 async function gravarFilhos(c: Ctx, saleId: string, ambientes: AmbienteIn[]) {
   for (const amb of ambientes) {
-    const { data: env } = await c.supabase.from("sale_environments").insert({ sale_id: saleId, nome: amb.nome || "Ambiente" }).select("id").single();
+    const { data: env, error: eEnv } = await c.supabase.from("sale_environments").insert({ sale_id: saleId, nome: amb.nome || "Ambiente" }).select("id").single();
+    if (eEnv) throw new Error(eEnv.message);
     const envId = env?.id as string;
     for (const it of amb.itens) {
-      const { data: item } = await c.supabase.from("sale_items").insert({
+      const { data: item, error: eItem } = await c.supabase.from("sale_items").insert({
         sale_id: saleId, environment_id: envId, product_id: it.product_id, regra: it.regra,
         desc_pct: it.desc_pct || 0, preco_override: it.preco_override ?? null,
       }).select("id").single();
+      if (eItem) throw new Error(eItem.message);
       const itemId = item?.id as string;
       if (it.medidas.length) {
-        await c.supabase.from("sale_measures").insert(it.medidas.map((m) => ({
+        const { error: eMed } = await c.supabase.from("sale_measures").insert(it.medidas.map((m) => ({
           item_id: itemId, l: m.l || 0, a: m.a || 0, q: m.q || 1, unit: m.unit || "cm",
         })));
+        if (eMed) throw new Error(eMed.message);
       }
     }
   }
@@ -96,7 +112,7 @@ export async function salvarOrcamento(id: string | null, orc: OrcamentoIn): Prom
       const { data: cur } = await c.supabase.from("sales").select("venda_gerada").eq("id", id).single();
       if (cur?.venda_gerada) return { ok: false, error: "Venda confirmada não pode ser editada como orçamento." };
       const { error } = await c.supabase.from("sales").update({ ...base, updated_by: c.uid, updated_at: new Date().toISOString() }).eq("id", id);
-      if (error) return { ok: false, error: error.message };
+      if (error) return { ok: false, error: dbErro("update sales", error.message) };
       await c.supabase.from("sale_environments").delete().eq("sale_id", id); // cascade nos filhos
       await gravarFilhos(c, id, orc.ambientes);
       await ctxAudit(c, "Comercial", "Editou orçamento", orc.cliente_nome);
@@ -107,13 +123,13 @@ export async function salvarOrcamento(id: string | null, orc: OrcamentoIn): Prom
       const { data: ins, error } = await c.supabase.from("sales").insert({
         ...base, numero, status: "ORCAMENTO", situacao: "ORCAMENTO", venda_gerada: false, created_by: c.uid,
       }).select("id").single();
-      if (error) return { ok: false, error: error.message };
+      if (error) return { ok: false, error: dbErro("insert sales", error.message) };
       const saleId = ins?.id as string;
       await gravarFilhos(c, saleId, orc.ambientes);
       await ctxAudit(c, "Comercial", "Criou orçamento", orc.cliente_nome);
       return { ok: true, id: saleId };
     }
-  } catch (e) { return { ok: false, error: (e as Error).message }; }
+  } catch (e) { return { ok: false, error: dbErro("salvarOrcamento", (e as Error).message) }; }
 }
 
 export async function duplicarOrcamento(id: string): Promise<R> {
@@ -185,7 +201,7 @@ export async function transformarEmVenda(id: string, dados: { entrada: number; f
       p_sale_id: id, p_idem: dados.idem, p_entrada: dados.entrada, p_forma: dados.forma || null,
       p_conta: dados.conta || null, p_operadora: dados.operadora || null, p_parcelas: dados.parcelas || 1, p_venc_primeira: null,
     });
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: dbErro("fn_transformar_venda", error.message) };
     await ctxAudit(c, "Comercial", "Transformou em venda", id);
     return { ok: true, id, ...(data as object) };
   } catch (e) { return { ok: false, error: (e as Error).message }; }

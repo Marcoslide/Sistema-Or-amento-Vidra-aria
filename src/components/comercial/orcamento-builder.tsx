@@ -13,6 +13,8 @@ import {
   listLojasSel, listClientesSel, listVendedoresSel, listProdutosSel, meuContexto,
   type Opt, type ProdutoOpt, type VendaFull,
 } from "@/lib/data/vendas-core";
+import { minhasPermissoes } from "@/lib/data/server-ctx";
+import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { salvarOrcamento, type OrcamentoIn } from "@/lib/data/vendas-actions";
 import {
   calcOrc, margemOrc, totalItem, memoMedida,
@@ -45,6 +47,9 @@ export function OrcamentoBuilder({ inicial }: { inicial?: VendaFull }) {
   const [produtos, setProdutos] = useState<ProdutoOpt[]>([]);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  // custo/margem só aparecem para quem tem permissão financeira (vendedor NÃO vê).
+  const [podeCusto, setPodeCusto] = useState(!hasSupabaseEnv());
+  const [podeMargem, setPodeMargem] = useState(!hasSupabaseEnv());
 
   const [storeId, setStoreId] = useState(inicial?.store_id || "");
   const [clienteId, setClienteId] = useState(inicial?.cliente_id || "");
@@ -75,6 +80,12 @@ export function OrcamentoBuilder({ inicial }: { inicial?: VendaFull }) {
   );
 
   useEffect(() => {
+    if (hasSupabaseEnv()) {
+      minhasPermissoes().then((p) => {
+        setPodeCusto(p.includes("fin.ver_custos"));
+        setPodeMargem(p.includes("fin.ver_margem"));
+      }).catch(() => { setPodeCusto(false); setPodeMargem(false); });
+    }
     Promise.all([listLojasSel(), listClientesSel(), listVendedoresSel(), listProdutosSel(), meuContexto()])
       .then(([lo, cl, ve, pr, ctx]) => {
         setLojas(lo); setClientes(cl); setVendedores(ve); setProdutos(pr); setErro("");
@@ -398,8 +409,8 @@ export function OrcamentoBuilder({ inicial }: { inicial?: VendaFull }) {
           </div>
           <div><p className="text-xs text-muted-foreground">Subtotal</p><p className="font-semibold">{formatCurrency(totais.sub)}</p></div>
           <div><p className="text-xs text-muted-foreground">Desconto</p><p className="font-semibold">-{formatCurrency(totais.descV)}</p></div>
-          <div className="hidden md:block"><p className="text-xs text-muted-foreground">Custo prev.</p><p className="font-semibold">{formatCurrency(margem.cp)}</p></div>
-          <div className="hidden md:block"><p className="text-xs text-muted-foreground">Margem</p><p className={`font-semibold ${margem.lucro >= 0 ? "text-emerald-600" : "text-destructive"}`}>{formatCurrency(margem.lucro)} ({margem.margem}%)</p></div>
+          {podeCusto && <div className="hidden md:block"><p className="text-xs text-muted-foreground">Custo prev.</p><p className="font-semibold">{formatCurrency(margem.cp)}</p></div>}
+          {podeMargem && <div className="hidden md:block"><p className="text-xs text-muted-foreground">Margem</p><p className={`font-semibold ${margem.lucro >= 0 ? "text-emerald-600" : "text-destructive"}`}>{formatCurrency(margem.lucro)} ({margem.margem}%)</p></div>}
           <div className="ml-auto text-right"><p className="text-xs text-muted-foreground">Total</p><p className="text-2xl font-bold text-primary">{formatCurrency(totais.total)}</p></div>
           {!bloqueado && (
             <div className="flex gap-2">
