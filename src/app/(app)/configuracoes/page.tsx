@@ -1,185 +1,74 @@
-"use client";
-
-import { Building2, Palette, SlidersHorizontal, Save } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import Link from "next/link";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/components/ui/toast";
+  Store, CreditCard, Landmark, Layers, Users, UserCog, Package, Tags, Truck,
+  Clock, Cog, TrendingDown, ChevronRight,
+} from "lucide-react";
+
+// Configurações = hub de cadastros administrativos (páginas reais com CRUD + exclusão segura).
+// Substitui o antigo formulário mockado; cada item abre o cadastro funcional correspondente.
+type Item = { href: string; label: string; desc: string; icon: React.ElementType };
+type Grupo = { titulo: string; itens: Item[] };
+
+const GRUPOS: Grupo[] = [
+  {
+    titulo: "Estrutura da empresa",
+    itens: [
+      { href: "/lojas", label: "Lojas / operações", desc: "Unidades, dados fiscais e responsáveis.", icon: Store },
+      { href: "/usuarios", label: "Usuários", desc: "Equipe com acesso ao sistema.", icon: Users },
+      { href: "/perfis", label: "Perfis de acesso", desc: "Permissões por função.", icon: UserCog },
+    ],
+  },
+  {
+    titulo: "Comercial",
+    itens: [
+      { href: "/clientes", label: "Clientes", desc: "Cadastro de clientes.", icon: Users },
+      { href: "/vendedores", label: "Vendedores", desc: "Equipe comercial.", icon: UserCog },
+      { href: "/produtos", label: "Produtos", desc: "Itens, preços e regras de cálculo.", icon: Package },
+      { href: "/familias", label: "Famílias", desc: "Agrupamento de produtos (inclui Moldura).", icon: Tags },
+      { href: "/fornecedores", label: "Fornecedores", desc: "Cadastro de fornecedores.", icon: Truck },
+    ],
+  },
+  {
+    titulo: "Financeiro",
+    itens: [
+      { href: "/contas", label: "Contas financeiras", desc: "Caixas e contas bancárias.", icon: Landmark },
+      { href: "/operadoras", label: "Operadoras de cartão", desc: "Taxas e prazos de recebimento.", icon: CreditCard },
+      { href: "/centro-custos", label: "Centro de custos", desc: "Custos fixos e variáveis.", icon: Layers },
+      { href: "/hora-homem", label: "Hora-homem", desc: "Custo de mão de obra.", icon: Clock },
+      { href: "/hora-maquina", label: "Hora-máquina", desc: "Custo de equipamentos.", icon: Cog },
+      { href: "/depreciacao", label: "Depreciação", desc: "Depreciação de ativos.", icon: TrendingDown },
+    ],
+  },
+];
 
 export default function ConfiguracoesPage() {
-  const { toast } = useToast();
-  const salvar = () =>
-    toast({
-      variant: "success",
-      title: "Configurações salvas",
-      description: "Suas preferências foram atualizadas (simulado).",
-    });
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Configurações"
-        description="Dados da empresa e preferências do sistema."
-      />
-
-      <Tabs defaultValue="empresa">
-        <TabsList>
-          <TabsTrigger value="empresa" className="gap-1.5">
-            <Building2 className="h-4 w-4" />
-            Empresa
-          </TabsTrigger>
-          <TabsTrigger value="orcamento" className="gap-1.5">
-            <SlidersHorizontal className="h-4 w-4" />
-            Orçamento
-          </TabsTrigger>
-          <TabsTrigger value="aparencia" className="gap-1.5">
-            <Palette className="h-4 w-4" />
-            Aparência
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="empresa">
-          <Card>
-            <CardHeader>
-              <CardTitle>Dados da empresa</CardTitle>
-              <CardDescription>
-                Aparecem no cabeçalho dos orçamentos em PDF.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="empresa">Nome / Razão social</Label>
-                <Input
-                  id="empresa"
-                  defaultValue="VidroGestor Vidraçaria & Esquadrias"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cnpj">CNPJ</Label>
-                <Input id="cnpj" defaultValue="12.345.678/0001-90" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tel">Telefone</Label>
-                <Input id="tel" defaultValue="(11) 3000-1000" />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="end">Endereço</Label>
-                <Input
-                  id="end"
-                  defaultValue="Rua das Indústrias, 450 — São Paulo/SP"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="orcamento">
-          <Card>
-            <CardHeader>
-              <CardTitle>Preferências de orçamento</CardTitle>
-              <CardDescription>Padrões aplicados a novos orçamentos.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="validade">Validade padrão (dias)</Label>
-                  <Input id="validade" type="number" defaultValue={15} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="desc">Desconto máximo geral (%)</Label>
-                  <Input id="desc" type="number" defaultValue={15} />
-                </div>
-              </div>
-              <div className="space-y-3 pt-2">
-                {[
-                  {
-                    t: "Exigir obra no orçamento",
-                    d: "Bloqueia a geração sem uma obra vinculada.",
-                    on: false,
-                  },
-                  {
-                    t: "Mostrar medidas no PDF",
-                    d: "Exibe largura × altura de cada item no documento.",
-                    on: true,
-                  },
-                  {
-                    t: "Numeração automática",
-                    d: "O sistema gera o número sequencial do orçamento.",
-                    on: true,
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.t}
-                    className="flex items-center justify-between rounded-lg border p-4"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{item.t}</p>
-                      <p className="text-xs text-muted-foreground">{item.d}</p>
-                    </div>
-                    <Switch defaultChecked={item.on} />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="aparencia">
-          <Card>
-            <CardHeader>
-              <CardTitle>Aparência</CardTitle>
-              <CardDescription>Identidade visual do sistema.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Cor principal</Label>
-                <div className="flex gap-2">
-                  {[
-                    "hsl(221 83% 45%)",
-                    "hsl(160 84% 39%)",
-                    "hsl(262 83% 58%)",
-                    "hsl(199 89% 48%)",
-                    "hsl(0 72% 51%)",
-                  ].map((c, i) => (
-                    <button
-                      key={c}
-                      className="h-9 w-9 rounded-full ring-offset-2 transition-all hover:scale-110 data-[active=true]:ring-2 data-[active=true]:ring-primary"
-                      data-active={i === 0}
-                      style={{ background: c }}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <div>
-                  <p className="text-sm font-medium">Modo compacto</p>
-                  <p className="text-xs text-muted-foreground">
-                    Reduz espaçamentos para telas menores.
-                  </p>
-                </div>
-                <Switch />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      <div className="flex justify-end">
-        <Button className="gap-1.5" onClick={salvar}>
-          <Save className="h-4 w-4" />
-          Salvar alterações
-        </Button>
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <div className="v6-page-title">Configurações</div>
+        <div className="v6-page-desc">Cadastros administrativos e parâmetros do sistema. Cada item abre o cadastro completo, com exclusão segura.</div>
       </div>
+
+      {GRUPOS.map((g) => (
+        <div key={g.titulo} style={{ marginBottom: 22 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--v6-muted)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 10 }}>{g.titulo}</div>
+          <div className="v6-grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))" }}>
+            {g.itens.map((it) => {
+              const Icon = it.icon;
+              return (
+                <Link key={it.href} href={it.href} className="v6-card" style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, textDecoration: "none", color: "inherit" }}>
+                  <div className="v6-ic"><Icon size={20} /></div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600 }}>{it.label}</div>
+                    <div style={{ fontSize: 12.5, color: "var(--v6-muted)" }}>{it.desc}</div>
+                  </div>
+                  <ChevronRight size={18} style={{ color: "var(--v6-muted)" }} />
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
