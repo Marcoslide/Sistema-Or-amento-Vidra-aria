@@ -21,6 +21,10 @@ type EntityDef = {
 };
 
 const REG: Record<string, EntityDef> = {
+  clientes: {
+    table: "customers", label: "cliente", deletePerm: "cad.excluir_clientes", storeScoped: true, nameCol: "nome",
+    vinculos: [{ table: "sales", col: "cliente_id", label: "vendas/orçamentos" }],
+  },
   lojas: {
     table: "stores", label: "loja", deletePerm: "adm.excluir_lojas", nameCol: "nome",
     vinculos: [
@@ -61,6 +65,25 @@ const REG: Record<string, EntityDef> = {
     table: "products", label: "produto", deletePerm: "cad.excluir_produtos",
     nameCol: "descricao",
     vinculos: [{ table: "sale_items", col: "product_id", label: "itens de venda" }],
+  },
+  "centro-custos": {
+    table: "cost_centers", label: "centro de custo", deletePerm: "fin.excluir_centros_custo", storeScoped: true,
+    vinculos: [
+      { table: "labor_costs", col: "centro_custo_id", label: "hora-homem" },
+      { table: "machine_costs", col: "centro_custo_id", label: "hora-máquina" },
+      { table: "depreciation_assets", col: "centro_custo_id", label: "bens" },
+      { table: "payables", col: "centro_custo_id", label: "contas a pagar" },
+      { table: "sale_extra_costs", col: "centro_custo_id", label: "custos de venda" },
+    ],
+  },
+  "hora-homem": {
+    table: "labor_costs", label: "hora-homem", deletePerm: "fin.excluir_mao_obra", storeScoped: true, vinculos: [],
+  },
+  "hora-maquina": {
+    table: "machine_costs", label: "hora-máquina", deletePerm: "fin.excluir_maquinas", storeScoped: true, vinculos: [],
+  },
+  depreciacao: {
+    table: "depreciation_assets", label: "bem", deletePerm: "fin.excluir_bens", storeScoped: true, vinculos: [],
   },
 };
 

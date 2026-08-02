@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import Link from "next/link";
 import { Plus, Search, MoreHorizontal, Pencil, Copy, Power, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ export type Field = {
   key: string; label: string;
   type: "text" | "number" | "checkbox" | "select" | "textarea";
   options?: { value: string; label: string }[];
-  optionsFrom?: "lojas" | "contas" | "familias" | "fornecedores";
+  optionsFrom?: "lojas" | "contas" | "familias" | "fornecedores" | "centrocustos";
   full?: boolean; required?: boolean;
   showWhen?: (v: Record<string, unknown>) => boolean;
 };
@@ -38,6 +39,7 @@ export function CadastroView(props: {
   nameKey?: string; columns: Column[]; fields: Field[];
   searchKeys: string[]; lojaFilter?: boolean;
   novo: () => Record<string, unknown>;
+  novoHref?: string;   // se definido, "Novo" navega para a página de criação (edição segue no diálogo)
 }) {
   const nameKey = props.nameKey || "nome";
   const [rows, setRows] = useState<Row[]>([]);
@@ -51,6 +53,7 @@ export function CadastroView(props: {
   const [contas, setContas] = useState<{ id: string; nome: string }[]>([]);
   const [familias, setFamilias] = useState<{ id: string; nome: string }[]>([]);
   const [fornecedores, setFornecedores] = useState<{ id: string; nome: string }[]>([]);
+  const [centrosCusto, setCentrosCusto] = useState<{ id: string; nome: string }[]>([]);
   const [form, setForm] = useState<Record<string, unknown> | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<{ id: string; det: { label: string; n: number }[] } | null>(null);
@@ -72,6 +75,7 @@ export function CadastroView(props: {
     if (precisaContas) listAtivos("financial_accounts").then(setContas).catch(() => {});
     if (props.fields.some((f) => f.optionsFrom === "familias")) listAtivos("product_families").then(setFamilias).catch(() => {});
     if (props.fields.some((f) => f.optionsFrom === "fornecedores")) listAtivos("suppliers").then(setFornecedores).catch(() => {});
+    if (props.fields.some((f) => f.optionsFrom === "centrocustos")) listAtivos("cost_centers").then(setCentrosCusto).catch(() => {});
   }, [props.fields, props.lojaFilter]);
 
   const filtered = useMemo(() => {
@@ -132,13 +136,16 @@ export function CadastroView(props: {
     if (f.optionsFrom === "contas") return contas.map((c) => ({ value: c.nome, label: c.nome }));
     if (f.optionsFrom === "familias") return familias.map((c) => ({ value: c.nome, label: c.nome }));
     if (f.optionsFrom === "fornecedores") return fornecedores.map((c) => ({ value: c.nome, label: c.nome }));
+    if (f.optionsFrom === "centrocustos") return centrosCusto.map((c) => ({ value: c.id, label: c.nome }));
     return f.options || [];
   }
 
   return (
     <div className="space-y-6">
       <PageHeader title={props.title} description={props.description}>
-        <Button className="gap-1.5" onClick={abrirNovo}><Plus className="h-4 w-4" /> Novo</Button>
+        {props.novoHref
+          ? <Button asChild className="gap-1.5"><Link href={props.novoHref}><Plus className="h-4 w-4" /> Novo</Link></Button>
+          : <Button className="gap-1.5" onClick={abrirNovo}><Plus className="h-4 w-4" /> Novo</Button>}
       </PageHeader>
 
       {erro && (
