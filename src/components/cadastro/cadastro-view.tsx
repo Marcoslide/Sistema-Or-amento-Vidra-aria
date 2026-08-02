@@ -2,14 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Search, MoreHorizontal, Pencil, Copy, Power, Trash2 } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Plus, Search, MoreHorizontal, Pencil, Copy, Power, Trash2, X } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -32,6 +25,19 @@ export type Column = {
   render?: (row: Record<string, unknown>) => React.ReactNode;
 };
 type Row = Record<string, unknown> & { id: string; nome?: string; descricao?: string; ativo?: boolean; store_id?: string | null };
+
+// Estilos de controle de formulário no visual V6 (mesmas medidas de .v6-search input / .v6-op select).
+const ctrl: React.CSSProperties = {
+  width: "100%", height: 38, border: "1px solid var(--v6-border)", borderRadius: 9,
+  padding: "0 11px", background: "var(--v6-card)", fontSize: 13.5, color: "var(--v6-fg)", outline: "none",
+};
+
+// Botão secundário no visual V6 (V6 só define .v6-btn-primary; secundários herdam .v6-btn + borda).
+function btnSecundario(kind?: "danger" | "ghost"): React.CSSProperties {
+  if (kind === "ghost") return { background: "transparent", color: "var(--v6-muted)" };
+  if (kind === "danger") return { background: "#fef2f2", color: "#b91c1c", border: "1px solid #fca5a5" };
+  return { background: "var(--v6-card)", color: "var(--v6-fg)", border: "1px solid var(--v6-border)" };
+}
 
 export function CadastroView(props: {
   entity: string; title: string; description: string;
@@ -140,100 +146,111 @@ export function CadastroView(props: {
     return f.options || [];
   }
 
+  const colSpanVazio = props.columns.length + 3;
+
   return (
-    <div className="space-y-6">
-      <PageHeader title={props.title} description={props.description}>
+    <div>
+      {/* Cabeçalho de página V6 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <div>
+          <div className="v6-page-title">{props.title}</div>
+          <div className="v6-page-desc">{props.description}</div>
+        </div>
         {props.novoHref
-          ? <Button asChild className="gap-1.5"><Link href={props.novoHref}><Plus className="h-4 w-4" /> Novo</Link></Button>
-          : <Button className="gap-1.5" onClick={abrirNovo}><Plus className="h-4 w-4" /> Novo</Button>}
-      </PageHeader>
+          ? <Link href={props.novoHref} className="v6-btn v6-btn-primary" style={{ marginLeft: "auto" }}><Plus /> Novo</Link>
+          : <button className="v6-btn v6-btn-primary" style={{ marginLeft: "auto" }} onClick={abrirNovo}><Plus /> Novo</button>}
+      </div>
 
       {erro && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+        <div className="v6-card" style={{ padding: 12, marginBottom: 12, borderColor: "#fca5a5", background: "#fef2f2", color: "#b91c1c", fontSize: 13 }}>
           {erro} — verifique a conexão. Os dados não são exibidos para não mostrar informação desatualizada.
         </div>
       )}
-      {msg && <div className="rounded-lg border bg-muted px-4 py-2 text-sm">{msg}</div>}
+      {msg && <div className="v6-card" style={{ padding: 12, marginBottom: 12, fontSize: 13 }}>{msg}</div>}
 
+      {/* Barra de seleção em massa */}
       {sel.size > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border bg-accent px-4 py-2 text-sm">
-          <b>{sel.size} selecionado(s)</b>
-          <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => massa("inativar")}>Inativar</Button>
-            <Button size="sm" variant="outline" onClick={() => massa("reativar")}>Reativar</Button>
-            <Button size="sm" variant="destructive" onClick={() => massa("excluir")}>Excluir</Button>
-            <Button size="sm" variant="ghost" onClick={() => setSel(new Set())}>Limpar</Button>
+        <div className="v6-card" style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", marginBottom: 12, borderColor: "var(--v6-primary)", background: "var(--v6-primary-soft)" }}>
+          <b style={{ fontSize: 13 }}>{sel.size} selecionado(s)</b>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <button className="v6-btn" style={btnSecundario()} onClick={() => massa("inativar")}>Inativar</button>
+            <button className="v6-btn" style={btnSecundario()} onClick={() => massa("reativar")}>Reativar</button>
+            <button className="v6-btn" style={btnSecundario("danger")} onClick={() => massa("excluir")}>Excluir</button>
+            <button className="v6-btn" style={btnSecundario("ghost")} onClick={() => setSel(new Set())}>Limpar</button>
           </div>
         </div>
       )}
 
-      <Card><CardContent className="p-0">
-        <div className="flex flex-wrap gap-3 border-b p-4">
-          <div className="relative max-w-sm flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar..." className="pl-9" />
+      {/* Card com busca + filtro de loja + tabela */}
+      <div className="v6-card">
+        <div className="v6-card-b" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", borderBottom: "1px solid var(--v6-border)" }}>
+          <div className="v6-search" style={{ flex: 1, maxWidth: 340 }}>
+            <Search />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar..." />
           </div>
           {props.lojaFilter && (
-            <select className="h-10 rounded-md border bg-background px-3 text-sm" value={lojaSel} onChange={(e) => setLojaSel(e.target.value)}>
-              <option value="">Todas as lojas</option>
-              {lojas.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
-            </select>
+            <div className="v6-op" style={{ display: "flex" }}>
+              <select style={{ ...ctrl, width: "auto" }} value={lojaSel} onChange={(e) => setLojaSel(e.target.value)}>
+                <option value="">Todas as lojas</option>
+                {lojas.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+              </select>
+            </div>
           )}
         </div>
 
-        <p className="px-4 pt-2 text-[11px] text-muted-foreground sm:hidden">← deslize para ver preço, status e ações →</p>
-        <div className="overflow-x-auto">
-          <Table className="min-w-[680px]">
-            <TableHeader><TableRow>
-              <TableHead className="w-10 pl-4"></TableHead>
-              {props.columns.map((c) => <TableHead key={c.key} className={c.align === "right" ? "text-right" : ""}>{c.label}</TableHead>)}
-              <TableHead>Status</TableHead>
-              <TableHead className="pr-4 text-right">Ações</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>
+        <p style={{ padding: "8px 20px 0", fontSize: 11, color: "var(--v6-muted)" }} className="sm:hidden">← deslize para ver preço, status e ações →</p>
+        <div className="v6-card-b" style={{ overflowX: "auto" }}>
+          <table className="v6-tbl" style={{ minWidth: 680 }}>
+            <thead><tr>
+              <th style={{ width: 36 }}></th>
+              {props.columns.map((c) => <th key={c.key} style={c.align === "right" ? { textAlign: "right" } : undefined}>{c.label}</th>)}
+              <th>Status</th>
+              <th style={{ textAlign: "right" }}>Ações</th>
+            </tr></thead>
+            <tbody>
               {loading ? (
-                <TableRow><TableCell colSpan={props.columns.length + 3} className="py-10 text-center text-muted-foreground">Carregando...</TableCell></TableRow>
+                <tr><td colSpan={colSpanVazio} style={{ textAlign: "center", padding: 28, color: "var(--v6-muted)" }}>Carregando...</td></tr>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={props.columns.length + 3} className="py-10 text-center text-muted-foreground">{erro ? "—" : "Nenhum registro."}</TableCell></TableRow>
+                <tr><td colSpan={colSpanVazio} style={{ textAlign: "center", padding: 28, color: "var(--v6-muted)" }}>{erro ? "—" : "Nenhum registro."}</td></tr>
               ) : filtered.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="pl-4">
+                <tr key={row.id}>
+                  <td>
                     <input type="checkbox" checked={sel.has(row.id)} onChange={(e) => {
                       const n = new Set(sel); if (e.target.checked) n.add(row.id); else n.delete(row.id); setSel(n);
-                    }} className="h-4 w-4 accent-primary" />
-                  </TableCell>
+                    }} style={{ width: 15, height: 15, accentColor: "var(--v6-primary)" }} />
+                  </td>
                   {props.columns.map((c) => (
-                    <TableCell key={c.key} className={c.align === "right" ? "text-right" : ""}>
+                    <td key={c.key} style={c.align === "right" ? { textAlign: "right" } : undefined}>
                       {c.render ? c.render(row) : String(row[c.key] ?? "—")}
-                    </TableCell>
+                    </td>
                   ))}
-                  <TableCell>
+                  <td>
                     {row.ativo === false
-                      ? <Badge variant="secondary">Inativo</Badge>
-                      : <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Ativo</Badge>}
-                  </TableCell>
-                  <TableCell className="pr-4 text-right">
+                      ? <span className="v6-chip" style={{ padding: "3px 10px", cursor: "default" }}>Inativo</span>
+                      : <span className="v6-chip" style={{ padding: "3px 10px", cursor: "default", background: "#dcfce7", color: "#15803d", borderColor: "#86efac" }}>Ativo</span>}
+                  </td>
+                  <td style={{ textAlign: "right" }}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                        <button className="v6-icon-btn" style={{ width: 32, height: 32, border: 0, background: "transparent" }}><MoreHorizontal size={16} /></button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => abrirEdit(row)}><Pencil className="h-4 w-4" /> Editar</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => duplicar(row)}><Copy className="h-4 w-4" /> Duplicar</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toggle(row)}><Power className="h-4 w-4" /> {row.ativo === false ? "Reativar" : "Inativar"}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => abrirEdit(row)}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => duplicar(row)}><Copy className="mr-2 h-4 w-4" /> Duplicar</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toggle(row)}><Power className="mr-2 h-4 w-4" /> {row.ativo === false ? "Reativar" : "Inativar"}</DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => excluir(row)}><Trash2 className="h-4 w-4" /> Excluir</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => excluir(row)}><Trash2 className="mr-2 h-4 w-4" /> Excluir</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ))}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
         </div>
-      </CardContent></Card>
+      </div>
 
-      {/* Form */}
+      {/* Diálogo de formulário */}
       <Dialog open={!!form} onOpenChange={(o) => { if (!o) { setForm(null); setMsg(""); } }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>{editId ? "Editar" : "Novo"} — {props.title}</DialogTitle></DialogHeader>
@@ -242,24 +259,23 @@ export function CadastroView(props: {
               {props.fields.filter((f) => !f.showWhen || f.showWhen(form)).map((f) => (
                 <div key={f.key} className={f.full ? "sm:col-span-2" : ""}>
                   {f.type === "checkbox" ? (
-                    <label className="mt-6 flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={Boolean(form[f.key])} onChange={(e) => setForm({ ...form, [f.key]: e.target.checked })} className="h-4 w-4 accent-primary" />
+                    <label style={{ marginTop: 24, display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
+                      <input type="checkbox" checked={Boolean(form[f.key])} onChange={(e) => setForm({ ...form, [f.key]: e.target.checked })} style={{ width: 15, height: 15, accentColor: "var(--v6-primary)" }} />
                       {f.label}
                     </label>
                   ) : (
                     <>
-                      <Label className="mb-1 block">{f.label}{f.required ? " *" : ""}</Label>
+                      <label style={{ display: "block", marginBottom: 4, fontSize: 12.5, fontWeight: 600, color: "var(--v6-muted)" }}>{f.label}{f.required ? " *" : ""}</label>
                       {f.type === "select" ? (
-                        <select className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                          value={String(form[f.key] ?? "")} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}>
+                        <select style={ctrl} value={String(form[f.key] ?? "")} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}>
                           <option value="">—</option>
                           {optsFor(f).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                       ) : f.type === "textarea" ? (
-                        <textarea className="min-h-[70px] w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        <textarea style={{ ...ctrl, height: "auto", minHeight: 70, padding: "8px 11px" }}
                           value={String(form[f.key] ?? "")} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
                       ) : (
-                        <Input type={f.type === "number" ? "number" : "text"} value={String(form[f.key] ?? "")}
+                        <input type={f.type === "number" ? "number" : "text"} style={ctrl} value={String(form[f.key] ?? "")}
                           onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
                       )}
                     </>
@@ -269,8 +285,8 @@ export function CadastroView(props: {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setForm(null); setMsg(""); }}>Cancelar</Button>
-            <Button onClick={salvar}>Salvar</Button>
+            <button className="v6-btn" style={btnSecundario()} onClick={() => { setForm(null); setMsg(""); }}>Cancelar</button>
+            <button className="v6-btn v6-btn-primary" onClick={salvar}>Salvar</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -279,14 +295,14 @@ export function CadastroView(props: {
       <Dialog open={!!blocked} onOpenChange={(o) => { if (!o) setBlocked(null); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Não é possível excluir</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Este cadastro possui utilização no sistema e não pode ser apagado:</p>
-          <ul className="list-disc pl-5 text-sm text-destructive">
+          <p style={{ fontSize: 13, color: "var(--v6-muted)" }}>Este cadastro possui utilização no sistema e não pode ser apagado:</p>
+          <ul style={{ listStyle: "disc", paddingLeft: 20, fontSize: 13, color: "#b91c1c" }}>
             {blocked?.det.map((d, i) => <li key={i}>{d.n} {d.label}</li>)}
           </ul>
-          <p className="text-sm text-muted-foreground">Para preservar o histórico, o cadastro pode ser <b>inativado</b>.</p>
+          <p style={{ fontSize: 13, color: "var(--v6-muted)" }}>Para preservar o histórico, o cadastro pode ser <b>inativado</b>.</p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setBlocked(null)}>Fechar</Button>
-            <Button onClick={inativarBloqueado}>Inativar cadastro</Button>
+            <button className="v6-btn" style={btnSecundario()} onClick={() => setBlocked(null)}><X className="mr-1 h-4 w-4" /> Fechar</button>
+            <button className="v6-btn v6-btn-primary" onClick={inativarBloqueado}>Inativar cadastro</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
