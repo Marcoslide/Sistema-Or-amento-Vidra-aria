@@ -202,7 +202,8 @@ export function OrcamentoBuilder({ inicial }: { inicial?: VendaFull }) {
         </div>
       )}
 
-      <fieldset disabled={bloqueado} className="space-y-6">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <fieldset disabled={bloqueado} className="min-w-0 space-y-6">
         {/* ---- Cabeçalho comercial ---- */}
         <Card>
           <CardContent className="grid gap-4 p-5 md:grid-cols-3">
@@ -412,27 +413,41 @@ export function OrcamentoBuilder({ inicial }: { inicial?: VendaFull }) {
         </div>
       </fieldset>
 
-      {/* ---- Totais + margem (barra fixa) ---- */}
-      <Card className="sticky bottom-4 border-primary/30 shadow-lg">
-        <CardContent className="flex flex-wrap items-center gap-6 p-5">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Package className="h-4 w-4" /> {totais.nItens} item(ns)
+      {/* ---- Resumo (painel fixo à direita, igual à V6) ---- */}
+      <Card className="lg:sticky lg:top-20">
+        <CardContent className="space-y-3 p-5">
+          <div className="flex items-center gap-2 text-sm font-semibold"><Package className="h-4 w-4" /> Resumo</div>
+          <p className="text-xs text-muted-foreground">
+            {ambientes.length} ambiente(s) · {totais.nItens} item(ns) · {ambientes.reduce((s, a) => s + a.itens.reduce((s2, it) => s2 + it.medidas.length, 0), 0)} medida(s)
+          </p>
+          <div className="border-t pt-3 text-sm">
+            <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Subtotal</span><span className="font-medium">{formatCurrency(totais.sub)}</span></div>
+            <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Desconto</span><span className="font-medium">-{formatCurrency(totais.descV)}</span></div>
+            {num(acrescimo) > 0 && <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Acréscimo</span><span>{formatCurrency(num(acrescimo))}</span></div>}
+            {num(frete) > 0 && <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Frete</span><span>{formatCurrency(num(frete))}</span></div>}
+            {num(instalacao) > 0 && <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Instalação</span><span>{formatCurrency(num(instalacao))}</span></div>}
           </div>
-          <div><p className="text-xs text-muted-foreground">Subtotal</p><p className="font-semibold">{formatCurrency(totais.sub)}</p></div>
-          <div><p className="text-xs text-muted-foreground">Desconto</p><p className="font-semibold">-{formatCurrency(totais.descV)}</p></div>
-          {podeCusto && <div className="hidden md:block"><p className="text-xs text-muted-foreground">Custo prev.</p><p className="font-semibold">{formatCurrency(margem.cp)}</p></div>}
-          {podeMargem && <div className="hidden md:block"><p className="text-xs text-muted-foreground">Margem</p><p className={`font-semibold ${margem.lucro >= 0 ? "text-emerald-600" : "text-destructive"}`}>{formatCurrency(margem.lucro)} ({margem.margem}%)</p></div>}
-          <div className="ml-auto text-right"><p className="text-xs text-muted-foreground">Total</p><p className="text-2xl font-bold text-primary">{formatCurrency(totais.total)}</p></div>
+          <div className="flex items-center justify-between border-t pt-3">
+            <span className="text-sm font-semibold">Total</span>
+            <span className="text-2xl font-bold text-primary">{formatCurrency(totais.total)}</span>
+          </div>
+          {(podeCusto || podeMargem) && (
+            <div className="border-t pt-3 text-sm">
+              {podeCusto && <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Custo prev.</span><span>{formatCurrency(margem.cp)}</span></div>}
+              {podeMargem && <div className="flex justify-between py-0.5"><span className="text-muted-foreground">Margem</span><span className={margem.lucro >= 0 ? "text-emerald-600" : "text-destructive"}>{formatCurrency(margem.lucro)} ({margem.margem}%)</span></div>}
+            </div>
+          )}
           {!bloqueado && (
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 border-t pt-3">
+              <Button disabled={salvando} onClick={() => salvar(true)}>Gerar orçamento / transformar</Button>
               <Button variant="outline" disabled={salvando} className="gap-1.5" onClick={() => salvar(false)}>
-                <Copy className="h-4 w-4" /> Salvar
+                <Copy className="h-4 w-4" /> Salvar rascunho
               </Button>
-              <Button disabled={salvando} onClick={() => salvar(true)}>Salvar e transformar em venda</Button>
             </div>
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
