@@ -2,14 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Search, Landmark, Wallet, CheckCircle2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
@@ -17,9 +10,19 @@ import {
   type ParcelaRow, type RecebimentoRow,
 } from "@/lib/data/financeiro-actions";
 
-const STATUS_VAR: Record<string, "muted" | "warning" | "success" | "destructive"> = {
-  ABERTO: "muted", PARCIAL: "warning", RECEBIDO: "success", VENCIDO: "destructive", CANCELADO: "destructive",
+// paleta de status no visual V6 (chips coloridos)
+const STATUS_CHIP: Record<string, React.CSSProperties> = {
+  ABERTO: { background: "#f1f5f9", color: "#475569", borderColor: "#e2e8f0" },
+  PARCIAL: { background: "#fef9c3", color: "#a16207", borderColor: "#fde68a" },
+  RECEBIDO: { background: "#dcfce7", color: "#15803d", borderColor: "#86efac" },
+  VENCIDO: { background: "#fee2e2", color: "#b91c1c", borderColor: "#fca5a5" },
+  CANCELADO: { background: "#fee2e2", color: "#b91c1c", borderColor: "#fca5a5" },
 };
+const ctrl: React.CSSProperties = {
+  width: "100%", height: 38, border: "1px solid var(--v6-border)", borderRadius: 9,
+  padding: "0 11px", background: "var(--v6-card)", fontSize: 13.5, color: "var(--v6-fg)", outline: "none",
+};
+const lbl: React.CSSProperties = { fontSize: 12.5, fontWeight: 600, color: "var(--v6-muted)", marginBottom: 6, display: "block" };
 
 export default function ReceberPage() {
   const [parcelas, setParcelas] = useState<ParcelaRow[]>([]);
@@ -31,11 +34,12 @@ export default function ReceberPage() {
   const [verParc, setVerParc] = useState<ParcelaRow | null>(null); const [recs, setRecs] = useState<RecebimentoRow[]>([]);
   const idemRef = useRef("");
 
-  const carregar = useCallback(() => {
-    getReceberData().then((r) => {
-      if (!r.ok) { setErro(r.error || "Falha."); return; }
-      setParcelas(r.parcelas || []); setPerm({ receber: !!r.canReceber, estornar: !!r.canEstornar }); setErro("");
-    });
+  const carregar = useCallback(async () => {
+    const r = await getReceberData();
+    if (!r.ok) { setErro(r.error || "Falha."); return [] as ParcelaRow[]; }
+    const lst = r.parcelas || [];
+    setParcelas(lst); setPerm({ receber: !!r.canReceber, estornar: !!r.canEstornar }); setErro("");
+    return lst;
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -44,6 +48,7 @@ export default function ReceberPage() {
     return parcelas.filter((p) => !s || (p.cliente_nome || "").toLowerCase().includes(s) || String(p.numero ?? "").includes(s) || p.descricao.toLowerCase().includes(s));
   }, [parcelas, q]);
   const totalAberto = useMemo(() => lista.reduce((s, p) => s + p.saldo, 0), [lista]);
+  const totalRecebido = useMemo(() => lista.reduce((s, p) => s + p.recebido, 0), [lista]);
 
   function abrirReceber(p: ParcelaRow) { setReceb(p); setValor(String(p.saldo)); setForma("Pix"); idemRef.current = ""; }
   async function confirmarReceber() {
@@ -53,80 +58,105 @@ export default function ReceberPage() {
     const res = await receberParcela(receb.id, { valor: v, forma, idem: idemRef.current });
     setBusy(false);
     if (!res.ok) { setErro(res.error || "Falha."); return; }
-    setReceb(null); setMsg("Recebimento registrado."); carregar();
+    setReceb(null); setMsg("Recebimento registrado."); await carregar();
   }
   async function abrirVer(p: ParcelaRow) { setVerParc(p); const r = await getRecebimentosParcela(p.id); setRecs(r.itens || []); }
   async function estornar(id: string) {
     const res = await estornarRecebimento(id);
     if (!res.ok) { setErro(res.error || "Falha."); return; }
-    setMsg("Recebimento estornado."); if (verParc) abrirVer(verParc); carregar();
+    setMsg("Recebimento estornado.");
+    const lst = await carregar();
+    if (verParc) {
+      const fresh = lst.find((x) => x.id === verParc.id) || null;
+      setVerParc(fresh);
+      const r = await getRecebimentosParcela(verParc.id); setRecs(r.itens || []);
+    }
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Contas a Receber" description="Parcelas das vendas — recebimento, baixa e estorno." />
-      {erro && <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">{erro}</div>}
-      {msg && <div className="rounded-lg border border-emerald-400/40 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{msg}</div>}
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card><CardContent className="p-5"><p className="text-xs text-muted-foreground">Parcelas</p><p className="text-2xl font-bold">{lista.length}</p></CardContent></Card>
-        <Card><CardContent className="p-5"><p className="text-xs text-muted-foreground">Saldo em aberto</p><p className="text-2xl font-bold text-primary">{formatCurrency(totalAberto)}</p></CardContent></Card>
-        <Card><CardContent className="p-5"><p className="text-xs text-muted-foreground">Recebido</p><p className="text-2xl font-bold text-emerald-600">{formatCurrency(lista.reduce((s, p) => s + p.recebido, 0))}</p></CardContent></Card>
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <div>
+          <div className="v6-page-title">Contas a Receber</div>
+          <div className="v6-page-desc">Parcelas das vendas — recebimento, baixa e estorno.</div>
+        </div>
       </div>
 
-      <Card><CardContent className="p-0">
-        <div className="border-b p-4"><div className="relative max-w-sm"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar cliente, venda ou descrição..." className="pl-9" /></div></div>
-        <div className="overflow-x-auto"><Table className="min-w-[760px]">
-          <TableHeader><TableRow>
-            <TableHead className="pl-6">Venda</TableHead><TableHead>Cliente</TableHead><TableHead>Parcela</TableHead>
-            <TableHead>Vencimento</TableHead><TableHead className="text-right">Valor</TableHead>
-            <TableHead className="text-right">Saldo</TableHead><TableHead>Status</TableHead><TableHead className="pr-6 text-right">Ações</TableHead>
-          </TableRow></TableHeader>
-          <TableBody>
-            {lista.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">Nenhuma parcela.</TableCell></TableRow>
-            ) : lista.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell className="pl-6">{p.sale_id ? <Link href={`/orcamentos/${p.sale_id}`} className="font-medium text-primary hover:underline">#{p.numero ?? "—"}</Link> : "—"}</TableCell>
-                <TableCell>{p.cliente_nome || "—"}</TableCell>
-                <TableCell className="text-muted-foreground">{p.descricao}</TableCell>
-                <TableCell className="text-muted-foreground">{p.vencimento ? formatDate(p.vencimento) : "—"}</TableCell>
-                <TableCell className="text-right">{formatCurrency(p.valor)}</TableCell>
-                <TableCell className="text-right font-semibold">{formatCurrency(p.saldo)}</TableCell>
-                <TableCell><Badge variant={STATUS_VAR[p.status] || "muted"}>{p.status}</Badge></TableCell>
-                <TableCell className="pr-6 text-right">
-                  <div className="flex justify-end gap-2">
-                    {perm.receber && p.saldo > 0 && <Button size="sm" onClick={() => abrirReceber(p)}>Receber</Button>}
-                    <Button size="sm" variant="outline" onClick={() => abrirVer(p)}>Recebimentos</Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table></div>
-      </CardContent></Card>
+      {erro && <div className="v6-card" style={{ padding: 12, marginBottom: 12, borderColor: "#fca5a5", background: "#fef2f2", color: "#b91c1c" }}>{erro}</div>}
+      {msg && <div className="v6-card" style={{ padding: 12, marginBottom: 12, borderColor: "#86efac", background: "#f0fdf4", color: "#15803d" }}>{msg}</div>}
+
+      <div className="v6-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+        <div className="v6-card v6-stat">
+          <div className="v6-ic"><Wallet size={20} /></div>
+          <div><div className="v6-lb">Parcelas</div><div className="v6-vl">{lista.length}</div></div>
+        </div>
+        <div className="v6-card v6-stat">
+          <div className="v6-ic"><Landmark size={20} /></div>
+          <div><div className="v6-lb">Saldo em aberto</div><div className="v6-vl" style={{ color: "var(--v6-primary)" }}>{formatCurrency(totalAberto)}</div></div>
+        </div>
+        <div className="v6-card v6-stat">
+          <div className="v6-ic" style={{ background: "#dcfce7", color: "#16a34a" }}><CheckCircle2 size={20} /></div>
+          <div><div className="v6-lb">Recebido</div><div className="v6-vl" style={{ color: "#16a34a" }}>{formatCurrency(totalRecebido)}</div></div>
+        </div>
+      </div>
+
+      <div className="v6-card" style={{ marginTop: 16 }}>
+        <div className="v6-card-b" style={{ paddingBottom: 0 }}>
+          <div className="v6-search" style={{ maxWidth: 360 }}><Search /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar cliente, venda ou descrição..." /></div>
+        </div>
+        <div className="v6-card-b" style={{ overflowX: "auto" }}>
+          <table className="v6-tbl" style={{ minWidth: 820 }}>
+            <thead><tr>
+              <th>Venda</th><th>Cliente</th><th>Parcela</th><th>Vencimento</th>
+              <th style={{ textAlign: "right" }}>Valor</th><th style={{ textAlign: "right" }}>Saldo</th>
+              <th>Status</th><th style={{ textAlign: "right" }}>Ações</th>
+            </tr></thead>
+            <tbody>
+              {lista.length === 0 ? (
+                <tr><td colSpan={8} style={{ textAlign: "center", padding: 28, color: "var(--v6-muted)" }}>Nenhuma parcela.</td></tr>
+              ) : lista.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.sale_id ? <Link href={`/orcamentos/${p.sale_id}`} style={{ color: "var(--v6-primary)", fontWeight: 700 }}>#{p.numero ?? "—"}</Link> : "—"}</td>
+                  <td>{p.cliente_nome || "—"}</td>
+                  <td style={{ color: "var(--v6-muted)" }}>{p.descricao}</td>
+                  <td style={{ color: "var(--v6-muted)" }}>{p.vencimento ? formatDate(p.vencimento) : "—"}</td>
+                  <td style={{ textAlign: "right" }}>{formatCurrency(p.valor)}</td>
+                  <td style={{ textAlign: "right", fontWeight: 600 }}>{formatCurrency(p.saldo)}</td>
+                  <td><span className="v6-chip" style={{ padding: "3px 10px", cursor: "default", ...(STATUS_CHIP[p.status] || STATUS_CHIP.ABERTO) }}>{p.status}</span></td>
+                  <td style={{ textAlign: "right" }}>
+                    <div style={{ display: "inline-flex", gap: 8, justifyContent: "flex-end" }}>
+                      {perm.receber && p.saldo > 0 && <button className="v6-btn v6-btn-primary" style={{ height: 32, padding: "0 12px" }} onClick={() => abrirReceber(p)}>Receber</button>}
+                      <button className="v6-btn" style={{ height: 32, padding: "0 12px", background: "var(--v6-card)", color: "var(--v6-fg)", border: "1px solid var(--v6-border)" }} onClick={() => abrirVer(p)}>Recebimentos</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* Modal receber */}
       <Dialog open={!!receb} onOpenChange={(o) => { if (!o && !busy) setReceb(null); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Registrar recebimento</DialogTitle></DialogHeader>
           {receb && (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">Saldo da parcela: <b>{formatCurrency(receb.saldo)}</b></p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5"><Label>Valor (R$)</Label><Input type="number" value={valor} onChange={(e) => setValor(e.target.value)} /></div>
-                <div className="space-y-1.5"><Label>Forma</Label>
-                  <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={forma} onChange={(e) => setForma(e.target.value)}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <p style={{ fontSize: 13, color: "var(--v6-muted)" }}>Saldo da parcela: <b style={{ color: "var(--v6-fg)" }}>{formatCurrency(receb.saldo)}</b></p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div><label style={lbl}>Valor (R$)</label><input style={ctrl} type="number" value={valor} onChange={(e) => setValor(e.target.value)} /></div>
+                <div><label style={lbl}>Forma</label>
+                  <select style={ctrl} value={forma} onChange={(e) => setForma(e.target.value)}>
                     <option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Boleto</option><option>Transferência</option>
                   </select>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">Gera um único movimento de caixa. Idempotente: cliques repetidos não duplicam.</p>
+              <p style={{ fontSize: 11.5, color: "var(--v6-muted-2)" }}>Gera um único movimento de caixa. Idempotente: cliques repetidos não duplicam.</p>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReceb(null)} disabled={busy}>Cancelar</Button>
-            <Button onClick={confirmarReceber} disabled={busy}>{busy ? "Processando..." : "Confirmar"}</Button>
+            <button className="v6-btn" style={{ background: "var(--v6-card)", color: "var(--v6-fg)", border: "1px solid var(--v6-border)" }} onClick={() => setReceb(null)} disabled={busy}>Cancelar</button>
+            <button className="v6-btn v6-btn-primary" onClick={confirmarReceber} disabled={busy}>{busy ? "Processando..." : "Confirmar"}</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -135,14 +165,14 @@ export default function ReceberPage() {
       <Dialog open={!!verParc} onOpenChange={(o) => { if (!o) setVerParc(null); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Recebimentos da parcela</DialogTitle></DialogHeader>
-          <div className="space-y-2">
-            {recs.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum recebimento.</p> : recs.map((r) => (
-              <div key={r.id} className="flex items-center gap-3 rounded-md border p-2 text-sm">
-                <span className="font-medium">{formatCurrency(r.valor)}</span>
-                <span className="text-muted-foreground">{r.forma || "—"}</span>
-                <span className="text-xs text-muted-foreground">{formatDate(r.created_at)}</span>
-                {r.estornado ? <Badge variant="destructive" className="ml-auto">Estornado</Badge>
-                  : perm.estornar ? <Button size="sm" variant="outline" className="ml-auto text-destructive" onClick={() => estornar(r.id)}>Estornar</Button> : null}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {recs.length === 0 ? <p style={{ fontSize: 13, color: "var(--v6-muted)" }}>Nenhum recebimento.</p> : recs.map((r) => (
+              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12, border: "1px solid var(--v6-border)", borderRadius: 9, padding: "8px 10px", fontSize: 13 }}>
+                <span style={{ fontWeight: 600 }}>{formatCurrency(r.valor)}</span>
+                <span style={{ color: "var(--v6-muted)" }}>{r.forma || "—"}</span>
+                <span style={{ fontSize: 11.5, color: "var(--v6-muted-2)" }}>{formatDate(r.created_at)}</span>
+                {r.estornado ? <span className="v6-chip" style={{ marginLeft: "auto", padding: "3px 10px", cursor: "default", ...STATUS_CHIP.CANCELADO }}>Estornado</span>
+                  : perm.estornar ? <button className="v6-btn" style={{ marginLeft: "auto", height: 30, padding: "0 12px", background: "#fef2f2", color: "#b91c1c", border: "1px solid #fca5a5" }} onClick={() => estornar(r.id)}>Estornar</button> : null}
               </div>
             ))}
           </div>
