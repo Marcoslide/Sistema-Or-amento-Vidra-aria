@@ -16,6 +16,8 @@ export type DashboardData = {
   funil: { label: string; chave: string; n: number }[];
   porLoja: { loja: string; total: number }[];
   obrasAndamento: { nome: string; cliente: string; progresso: number; status: string }[];
+  situacaoObras: { aguardando: number; execucao: number; concluida: number };
+  caixaDia: { entradas: number; saidas: number; saldo: number };
   agendaHoje: { hora: string; tipo: string; cliente: string }[];
   alertas: string[];
   atualizadoEm: string;
@@ -28,7 +30,8 @@ const vazio = (): DashboardData => ({
   faturamento: 0, vendas: 0, ticketMedio: 0, orcAberto: 0, obrasExec: 0, aReceber: 0,
   faturamentoAnterior: 0, deltaFaturamentoPct: 0,
   evolucao: [], meta: 0, realizado: 0, vendasRecentes: [], melhoresVendedores: [], funil: [],
-  porLoja: [], obrasAndamento: [], agendaHoje: [], alertas: [], atualizadoEm: "", temDados: false,
+  porLoja: [], obrasAndamento: [], situacaoObras: { aguardando: 0, execucao: 0, concluida: 0 },
+  caixaDia: { entradas: 0, saidas: 0, saldo: 0 }, agendaHoje: [], alertas: [], atualizadoEm: "", temDados: false,
 });
 
 export async function getDashboard(periodo: "hoje" | "semana" | "mes" | "ano" = "mes", storeId?: string): Promise<DashboardData> {
@@ -123,6 +126,21 @@ export async function getDashboard(periodo: "hoje" | "semana" | "mes" | "ano" = 
     const { data: obrasRows } = await oq;
     const obrasAndamento = (obrasRows || []).map((o) => ({ nome: (o.nome as string) || "Obra", cliente: "", progresso: Number(o.progresso) || 0, status: (o.status as string) || "aguardando" }));
 
+    // Situação das obras (distribuição por status — todas, não só as 6 listadas)
+    let soq = c.supabase.from("obras").select("status");
+    if (storeId) soq = soq.eq("store_id", storeId);
+    const { data: allObras } = await soq;
+    const situacaoObras = { aguardando: 0, execucao: 0, concluida: 0 };
+    (allObras || []).forEach((o) => { const st = (o.status as string) || "aguardando"; if (st in situacaoObras) (situacaoObras as Record<string, number>)[st]++; });
+
+    // Caixa do dia (movimentos de hoje)
+    let cxq = c.supabase.from("cash_movements").select("tipo,valor").eq("data", agora.toISOString().slice(0, 10));
+    if (storeId) cxq = cxq.eq("store_id", storeId);
+    const { data: cxRows } = await cxq;
+    const entradas = (cxRows || []).filter((m) => m.tipo === "entrada").reduce((s, m) => s + (Number(m.valor) || 0), 0);
+    const saidas = (cxRows || []).filter((m) => m.tipo === "saida").reduce((s, m) => s + (Number(m.valor) || 0), 0);
+    const caixaDia = { entradas: Math.round(entradas * 100) / 100, saidas: Math.round(saidas * 100) / 100, saldo: Math.round((entradas - saidas) * 100) / 100 };
+
     // Agenda de hoje
     const hojeStr = agora.toISOString().slice(0, 10);
     let aq = c.supabase.from("agenda_eventos").select("hora,tipo,cliente_nome,store_id").eq("data", hojeStr).order("hora").limit(8);
@@ -141,7 +159,7 @@ export async function getDashboard(periodo: "hoje" | "semana" | "mes" | "ano" = 
       orcAberto, obrasExec, aReceber: Math.round(aReceber * 100) / 100,
       faturamentoAnterior: Math.round(faturamentoAnterior * 100) / 100, deltaFaturamentoPct,
       evolucao, meta, realizado: faturamento, vendasRecentes, melhoresVendedores, funil,
-      porLoja, obrasAndamento, agendaHoje, alertas, atualizadoEm: agora.toISOString(), temDados: true,
+      porLoja, obrasAndamento, situacaoObras, caixaDia, agendaHoje, alertas, atualizadoEm: agora.toISOString(), temDados: true,
     };
   } catch {
     return vazio(); // mock/sem sessão: zeros, sem dados fictícios

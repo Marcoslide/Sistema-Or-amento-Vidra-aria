@@ -200,6 +200,30 @@ export default function DashboardPage() {
         </div>
 
         <div className="v6-card">
+          <div className="v6-card-h"><div className="v6-card-title">Situação das obras</div></div>
+          <div className="v6-card-b v6-cols" style={{ gap: 8 }}>
+            {d ? [
+              { l: "Aguardando", n: d.situacaoObras.aguardando, c: "#64748b" },
+              { l: "Em execução", n: d.situacaoObras.execucao, c: "#b45309" },
+              { l: "Concluídas", n: d.situacaoObras.concluida, c: "#16a34a" },
+            ].map((s) => (
+              <div key={s.l} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0", borderBottom: "1px solid #eef2f7" }}>
+                <span style={{ color: s.c, fontWeight: 600 }}>{s.l}</span><b>{s.n}</b>
+              </div>
+            )) : <div className="v6-lb">Sem dados.</div>}
+          </div>
+        </div>
+
+        <div className="v6-card">
+          <div className="v6-card-h"><div className="v6-card-title">Caixa do dia</div></div>
+          <div className="v6-card-b">
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0", borderBottom: "1px solid #eef2f7" }}><span style={{ color: "#16a34a" }}>Entradas</span><b>{formatCurrency(d?.caixaDia.entradas || 0)}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0", borderBottom: "1px solid #eef2f7" }}><span style={{ color: "#dc2626" }}>Saídas</span><b>{formatCurrency(d?.caixaDia.saidas || 0)}</b></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: "8px 0 0", fontWeight: 700 }}><span>Saldo do dia</span><b>{formatCurrency(d?.caixaDia.saldo || 0)}</b></div>
+          </div>
+        </div>
+
+        <div className="v6-card">
           <div className="v6-card-h"><div className="v6-card-title">Agenda de hoje</div></div>
           <div className="v6-card-b">
             {(d?.agendaHoje || []).length === 0 ? <div className="v6-lb">Sem compromissos para hoje.</div> :
