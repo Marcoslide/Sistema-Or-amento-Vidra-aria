@@ -120,6 +120,7 @@ create table if not exists financial_accounts ( -- contas financeiras
   nome text not null, tipo text, banco text, agencia text, numero text, digito text,
   titular text, doc text, saldo_inicial numeric(14,2) default 0, data_saldo date,
   aceita_entrada boolean default true, aceita_saida boolean default true, padrao boolean default false,
+  obs text,
   ativo boolean not null default true
 );
 
@@ -129,6 +130,7 @@ create table if not exists card_operators ( -- operadoras
   store_id uuid references stores(id) on delete set null,
   nome text not null, conta text, tipo text default 'ambos', bandeiras text, prazo text,
   parcelas jsonb default '[]'::jsonb, antecipacao boolean default false, taxa_antecip numeric(6,2) default 0,
+  obs text,
   ativo boolean not null default true
 );
 

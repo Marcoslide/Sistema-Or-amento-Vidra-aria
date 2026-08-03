@@ -69,6 +69,14 @@ export function qtdMedida(regra: Regra, m: Medida, prod?: ProdutoCalc): number {
   }
 }
 
+// Quantidade exibida na VIA DO CLIENTE (PDF do cliente).
+// Regra aprovada V6: para MOLDURA mostra a QUANTIDADE COMERCIAL (nº de quadros/peças),
+// NUNCA o metro linear interno usado no cálculo. As demais regras seguem a métrica comercial usual.
+export function qtdCliente(regra: Regra, m: Medida, prod?: ProdutoCalc): number {
+  if (regra === "MOLDURA") return Math.max(0, Math.floor(num0(m.q)) || 0);
+  return qtdMedida(regra, m, prod);
+}
+
 export function precoItem(it: ItemCalc): number {
   return it.precoOverride != null ? num0(it.precoOverride) : num0(it.produto?.preco);
 }

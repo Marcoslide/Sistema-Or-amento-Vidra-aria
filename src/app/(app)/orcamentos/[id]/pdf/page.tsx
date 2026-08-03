@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { getVenda, type VendaFull } from "@/lib/data/vendas-core";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { calcOrc, totalItem, qtdMedida, type Regra } from "@/lib/commercial/calc";
+import { calcOrc, totalItem, qtdCliente, type Regra } from "@/lib/commercial/calc";
 import { labelSituacao } from "@/lib/commercial/situacao";
 
 type Empresa = { nome: string; cnpj: string; loja: string; cidade: string; uf: string; resp: string; logo: string; contato: string; rodape: string };
@@ -133,7 +133,7 @@ export default function VendaPdfPage() {
                     medidas: it.medidas.map((m) => ({ l: m.l, a: m.a, q: m.q, unit: m.unit as "cm" | "mm" | "m" })),
                     produto: p ? { preco: p.preco, larguraMolduraCm: p.larguraMolduraCm, multiplicadorCorte: p.multiplicadorCorte } : undefined,
                   });
-                  const qtd = it.medidas.reduce((s, m) => s + qtdMedida(it.regra as Regra, { l: m.l, a: m.a, q: m.q, unit: m.unit as "cm" | "mm" | "m" }, p), 0);
+                  const qtd = it.medidas.reduce((s, m) => s + qtdCliente(it.regra as Regra, { l: m.l, a: m.a, q: m.q, unit: m.unit as "cm" | "mm" | "m" }, p), 0);
                   return (
                     <tr key={ii} className="border-b border-neutral-100 align-top">
                       <td className="py-1">{p?.descricao || "Item"}</td>
