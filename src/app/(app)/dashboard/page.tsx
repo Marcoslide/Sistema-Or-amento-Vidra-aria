@@ -59,8 +59,20 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 6 KPIs */}
-      <div className="v6-grid" style={{ gridTemplateColumns: "repeat(6,1fr)" }}>
+      {/* Resumo (callout V6) */}
+      {d && (
+        <div className="v6-card" style={{ background: "var(--v6-primary-soft)", borderColor: "#c7d6f7", padding: "14px 18px", marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
+          <div className="v6-ic" style={{ width: 32, height: 32 }}><Percent size={16} /></div>
+          <div style={{ fontSize: 13.5 }}>
+            <b>Resumo</b> — {d.vendas > 0
+              ? <>Faturamento de <b>{formatCurrency(d.faturamento)}</b> em {d.vendas} venda(s) no período.</>
+              : <>Sem vendas confirmadas no período.</>} Acompanhe os orçamentos em aberto ({d.orcAberto}).
+          </div>
+        </div>
+      )}
+
+      {/* KPIs — 3 colunas (2×3), igual à V6 */}
+      <div className="v6-grid" style={{ gridTemplateColumns: "repeat(3,minmax(0,1fr))" }}>
         {kpis.map((k, i) => (
           <div key={i} className="v6-card v6-stat">
             <div className="v6-ic">{k.ic}</div>
