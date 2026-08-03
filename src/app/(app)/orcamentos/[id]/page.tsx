@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Printer, ArrowRight, Wallet } from "lucide-react";
+import { Printer, ArrowRight, Wallet, FileText } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +74,7 @@ export default function VendaPage() {
           <PageHeader title={`Venda #${venda.numero ?? ""}`} description={`${venda.cliente_nome} — ${formatCurrency(venda.total)}`}>
             <Button asChild variant="outline" className="gap-1.5"><Link href={`/orcamentos/${venda.id}/financeiro`}><Wallet className="h-4 w-4" /> Financeiro</Link></Button>
             <Button asChild variant="outline" className="gap-1.5"><Link href={`/orcamentos/${venda.id}/pdf`}><Printer className="h-4 w-4" /> PDF</Link></Button>
+            <Button asChild variant="outline" className="gap-1.5"><Link href={`/orcamentos/${venda.id}/documentos`}><FileText className="h-4 w-4" /> Documentos</Link></Button>
           </PageHeader>
           <Card>
             <CardContent className="flex flex-wrap items-center gap-4 p-5">
