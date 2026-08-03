@@ -30,7 +30,6 @@ export default function HoraMaquinaPage() {
         { key: "operador", label: "Operador (R$)", type: "number" },
         { key: "horas_disponiveis", label: "Horas disponíveis", type: "number" },
         { key: "horas_produtivas", label: "Horas produtivas", type: "number" },
-        { key: "custo_hora", label: "Custo/hora (R$)", type: "number" },
         { key: "tipo", label: "Tipo", type: "select", options: [{ value: "valor", label: "valor" }, { value: "percentual", label: "percentual" }] },
         { key: "centro_custo_id", label: "Centro de custo", type: "select", optionsFrom: "centrocustos" },
         { key: "store_id", label: "Loja", type: "select", optionsFrom: "lojas" },

@@ -17,7 +17,7 @@ export default function DepreciacaoPage() {
         { key: "nome", label: "Bem" },
         { key: "custo_original", label: "Custo", align: "right", render: (r) => `R$ ${Number(r.custo_original || 0).toFixed(2)}` },
         { key: "valor_contabil", label: "Valor contábil", align: "right", render: (r) => `R$ ${Number(r.valor_contabil || 0).toFixed(2)}` },
-        { key: "status", label: "Status" },
+        { key: "status", label: "Situação" },
       ]}
       fields={[
         { key: "nome", label: "Bem", type: "text", full: true, required: true },

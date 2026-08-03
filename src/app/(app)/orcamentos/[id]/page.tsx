@@ -38,10 +38,14 @@ export default function VendaPage() {
   }, [params.id]);
 
   useEffect(() => { carregar(); }, [carregar]);
-  // atalho vindo do builder: abrir modal de transformação automaticamente
+  // atalho vindo do builder: abrir modal de transformação automaticamente.
+  // Limpa o parâmetro ?venda=1 imediatamente (sem recarregar) para o modal NÃO reabrir após F5.
   useEffect(() => {
-    if (venda && !venda.venda_gerada && search.get("venda") === "1") setModal(true);
-  }, [venda, search]);
+    if (venda && !venda.venda_gerada && search.get("venda") === "1") {
+      setModal(true);
+      router.replace(`/orcamentos/${params.id}`);
+    }
+  }, [venda, search, router, params.id]);
 
   async function avancar(nova: string) {
     setMsg(""); setErro("");

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { custoHoraHomem, custoHoraMaquina } from "@/lib/custos/calc";
 
 // ============================================================
 // Server actions dos cadastros — validação NO SERVIDOR:
@@ -178,6 +179,9 @@ export async function acaoSalvar(entity: string, id: string | null, data: Record
   if (!def) return { ok: false, error: "Cadastro inválido." };
   try {
     const c = await ctx();
+    // Custo/hora é SEMPRE derivado no servidor (não confiar no valor do formulário).
+    if (entity === "hora-homem") data.custo_hora = custoHoraHomem(data);
+    else if (entity === "hora-maquina") data.custo_hora = custoHoraMaquina(data);
     const payload = { ...data, organization_id: c.org };
     if (id) {
       const { error } = await c.supabase.from(def.table).update(data).eq("id", id);
