@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Save, Plus, Upload, RotateCcw, Building2, Store, MoreHorizontal, Pencil, Power,
-  CreditCard, Landmark, Layers, Users, UserCog, Package, Tags, Truck, Clock, Cog, TrendingDown, ChevronRight,
+  CreditCard, Landmark, Layers, Users, UserCog, Package, Tags, Truck, Clock, Cog, TrendingDown, ChevronRight, FolderTree,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -332,6 +332,7 @@ const GRUPOS_MAIS: { titulo: string; itens: ItemMais[] }[] = [
   { titulo: "Financeiro", itens: [
     { href: "/contas", label: "Contas financeiras", desc: "Caixas e contas bancárias.", icon: Landmark },
     { href: "/operadoras", label: "Operadoras de cartão", desc: "Taxas e prazos.", icon: CreditCard },
+    { href: "/categorias-financeiras", label: "Categorias financeiras", desc: "Categorias de receita/despesa.", icon: FolderTree },
     { href: "/centro-custos", label: "Centro de custos", desc: "Custos fixos e variáveis.", icon: Layers },
     { href: "/hora-homem", label: "Hora-homem", desc: "Custo de mão de obra.", icon: Clock },
     { href: "/hora-maquina", label: "Hora-máquina", desc: "Custo de equipamentos.", icon: Cog },
