@@ -18,6 +18,7 @@ export default function AgendaPage() {
   const [erro, setErro] = useState("");
   const [q, setQ] = useState(""); const [fStatus, setFStatus] = useState("");
   const [novo, setNovo] = useState(false);
+  const [reagendarEvt, setReagendarEvt] = useState<EventoRow | null>(null);
 
   const carregar = useCallback(() => {
     listAgenda(fStatus ? { status: fStatus } : undefined).then((r) => { if (r.ok && r.data) { setRows(r.data); setErro(""); } else setErro(r.error || "Falha ao carregar a agenda."); });
@@ -30,10 +31,8 @@ export default function AgendaPage() {
   }, [rows, q]);
 
   async function concluir(e: EventoRow) { const r = await setStatusEvento(e.id, "concluida"); if (r.ok) { toast({ variant: "success", title: "Evento concluído" }); carregar(); } }
-  async function reagendar(e: EventoRow) {
-    const nova = prompt("Reagendar para (AAAA-MM-DD):", e.data); if (!nova) return;
-    const r = await setStatusEvento(e.id, "reagendada", nova); if (r.ok) { toast({ variant: "info", title: "Reagendado" }); carregar(); } else toast({ variant: "warning", title: "Falha", description: r.error || "" });
-  }
+  // Reagendar via MODAL controlado (sem prompt/alert/confirm nativos que travam a aba).
+  function reagendar(e: EventoRow) { setReagendarEvt(e); }
 
   return (
     <div>
@@ -79,6 +78,44 @@ export default function AgendaPage() {
       </div>
 
       {novo && <NovoEventoDialog onClose={() => setNovo(false)} onSaved={() => { setNovo(false); carregar(); }} toast={toast} />}
+      {reagendarEvt && <ReagendarDialog evt={reagendarEvt} onClose={() => setReagendarEvt(null)} onSaved={() => { setReagendarEvt(null); carregar(); }} toast={toast} />}
+    </div>
+  );
+}
+
+function ReagendarDialog({ evt, onClose, onSaved, toast }: { evt: EventoRow; onClose: () => void; onSaved: () => void; toast: ReturnType<typeof useToast>["toast"] }) {
+  const [data, setData] = useState(evt.data || "");
+  const [hora, setHora] = useState(evt.hora || "");
+  const [obs, setObs] = useState("");
+  const [saving, setSaving] = useState(false); const [err, setErr] = useState("");
+
+  async function salvar() {
+    if (!data) { setErr("Informe a nova data."); return; }
+    setSaving(true);
+    const r = await setStatusEvento(evt.id, "reagendada", data, hora);
+    setSaving(false);
+    if (r.ok) { toast({ variant: "info", title: "Reagendado", description: `${evt.cliente_nome || evt.titulo || "Evento"}${obs ? " — " + obs : ""}` }); onSaved(); }
+    else setErr(r.error || "Falha ao reagendar.");
+  }
+
+  return (
+    <div className="v6-modal-scrim" onClick={onClose}>
+      <div className="v6-modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+        <div className="v6-modal-h"><span>Reagendar — {evt.cliente_nome || evt.titulo || "evento"}</span><button className="v6-x" onClick={onClose}>✕</button></div>
+        <div className="v6-modal-b">
+          {err && <div className="v6-field-err" style={{ marginBottom: 10 }}>{err}</div>}
+          <div className="v6-g2">
+            <div><label className="v6-lbl">Nova data</label><input className="v6-inp" type="date" value={data} onChange={(e) => setData(e.target.value)} /></div>
+            <div><label className="v6-lbl">Novo horário</label><input className="v6-inp" type="time" value={hora} onChange={(e) => setHora(e.target.value)} /></div>
+            <div className="v6-col-span"><label className="v6-lbl">Profissional</label><input className="v6-inp" value={evt.profissional} disabled style={{ background: "#f8fafc" }} /></div>
+            <div className="v6-col-span"><label className="v6-lbl">Motivo / observação</label><textarea className="v6-inp" rows={2} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
+          </div>
+        </div>
+        <div className="v6-modal-f">
+          <button className="v6-btn v6-btn-outline" onClick={onClose}>Cancelar</button>
+          <button className="v6-btn v6-btn-primary" onClick={salvar} disabled={saving}><Save size={16} /> {saving ? "Salvando…" : "Reagendar"}</button>
+        </div>
+      </div>
     </div>
   );
 }
