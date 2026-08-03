@@ -30,9 +30,14 @@ Todos os arquivos são idempotentes (`if not exists` / `on conflict`).
 | 10 | `supabase/migrations/0008_obras.sql` | `obras`, `obra_checklist`, `obra_diario` + RLS | passos 1 e 2 |
 | 11 | `supabase/migrations/0009_agenda.sql` | `agenda_eventos` + RLS | passos 1 e 2 |
 | 12 | `supabase/migrations/0010_reclamacoes.sql` | `reclamacoes`, `reclamacao_historico` + RLS | passos 1 e 2 |
-| 13 | `supabase/seed-staging.sql` | Seed de homologação (ver §3) — reexecutar concede permissões novas | passo 1 |
+| 13 | `supabase/migrations/0011_obs_operadoras_contas.sql` | Coluna `obs` em `card_operators` e `financial_accounts` | passo 1 |
+| 14 | `supabase/migrations/0012_pronto_execucao.sql` | Etapa "Pronto para execução": `fn_concluir_producao` libera a venda para a fila (não inicia execução) | passo 6 |
+| 15 | `supabase/migrations/0013_identidade_empresa_safenet.sql` | **Rede de segurança**: reafirma (idempotente) todas as colunas de identidade em `organizations`/`stores` + backfill fantasia/razão a partir de `nome` | passo 1 |
+| 16 | `supabase/migrations/0014_backfill_custo_hora.sql` | Recalcula `custo_hora` de registros antigos (hora-homem/máquina) sem sobrescrever valor manual | passos 1 e 3 |
+| 17 | `supabase/seed-staging.sql` | Seed de homologação (ver §3) — reexecutar concede permissões novas | passo 1 |
 
-> Aplicar por ordem de número de arquivo. Todos idempotentes (`if not exists` / `on conflict`).
+> Aplicar por ordem de número de arquivo. Todos idempotentes (`if not exists` / `on conflict` / `create or replace`).
+> **IMPORTANTE:** aplicar **TODAS** as migrations 0001→0014 — aplicar só 0011/0012 sobre um banco antigo deixa `organizations` sem as colunas de identidade (a 0013 corrige isso de qualquer forma).
 
 ## 2. Como aplicar
 
