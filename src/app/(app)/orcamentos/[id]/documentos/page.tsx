@@ -87,7 +87,17 @@ export default function DocumentosPage() {
       <div className="mx-auto max-w-3xl rounded-lg border bg-white p-8 text-black shadow-sm print:border-0 print:shadow-none">
         <Cabecalho />
 
-        {tipo === "contrato" && (
+        {tipo === "contrato" && (!emp?.representante || !emp?.foro_comarca) && (
+          <div className="mt-4 rounded-lg border border-amber-400 bg-amber-50 p-4 text-sm text-amber-800">
+            <b>Contrato indisponível — dados jurídicos da empresa incompletos.</b>
+            <p className="mt-1">Preencha em <b>Configurações → Empresa</b>: {[
+              !emp?.representante ? "Representante legal" : null,
+              !emp?.foro_comarca ? "Foro (comarca)" : null,
+            ].filter(Boolean).join(" e ")}. Sem esses campos o sistema não gera o contrato.</p>
+          </div>
+        )}
+
+        {tipo === "contrato" && emp?.representante && emp?.foro_comarca && (
           <div className="space-y-3 pt-4 text-sm leading-relaxed">
             <p className="text-center text-base font-bold">CONTRATO DE PRESTAÇÃO DE SERVIÇOS / FORNECIMENTO</p>
             <p><b>CONTRATADA:</b> {emp?.razao_social || nomeEmp}{emp?.cnpj ? `, CNPJ ${emp.cnpj}` : ""}{emp?.ie ? `, IE ${emp.ie}` : ""}{enderecoEmp ? `, situada em ${enderecoEmp}` : ""}, neste ato representada por {emp?.representante || "seu representante legal"}{emp?.rep_cpf ? `, CPF ${emp.rep_cpf}` : ""}.</p>

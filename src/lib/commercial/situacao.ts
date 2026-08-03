@@ -22,11 +22,13 @@ export const SITUACAO_VARIANT: Record<string, "default" | "secondary" | "success
   CANCELADO: "destructive",
 };
 
-// Próximos passos permitidos no ciclo (avanço comercial após virar venda).
-// Produção → Pronto para execução → Em execução → Finalizada (fluxo V6).
+// Próximos passos permitidos no ciclo (avanço comercial manual após virar venda).
+// IMPORTANTE: a passagem PRODUÇÃO → PRONTO_EXECUCAO NÃO é manual — só ocorre via
+// conclusão da produção (fn_concluir_producao), que valida etapas e terceirizações.
+// Por isso PRODUCAO não oferece avanço manual para PRONTO_EXECUCAO (apenas cancelar).
 export const SITUACAO_PROXIMAS: Record<string, string[]> = {
   VENDA_CONFIRMADA: ["PRODUCAO", "CANCELADO"],
-  PRODUCAO: ["PRONTO_EXECUCAO", "CANCELADO"],
+  PRODUCAO: ["CANCELADO"],
   PRONTO_EXECUCAO: ["EXECUCAO", "CANCELADO"],
   EXECUCAO: ["FINALIZADA", "CANCELADO"],
 };

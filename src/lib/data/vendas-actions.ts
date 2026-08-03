@@ -162,12 +162,49 @@ export async function duplicarOrcamento(id: string): Promise<R> {
 export async function mudarSituacao(id: string, nova: string, obs?: string): Promise<R> {
   try {
     const c = await getCtx();
-    const { data: o } = await c.supabase.from("sales").select("situacao").eq("id", id).single();
+    const { data: o } = await c.supabase.from("sales").select("situacao,store_id,cliente_id,cliente_nome").eq("id", id).single();
     if (!o) return { ok: false, error: "Não encontrado." };
+    const atual = o.situacao as string;
+
+    // ---- TRAVA DE PRODUÇÃO (regra V6): não liberar para execução sem produção concluída ----
+    if (nova === "PRONTO_EXECUCAO" || nova === "EXECUCAO") {
+      const { data: op } = await c.supabase
+        .from("production_orders").select("id,status").eq("sale_id", id).eq("organization_id", c.org).maybeSingle();
+      if (!op) return { ok: false, error: "Inicie a produção antes de liberar para execução." };
+      if (op.status !== "CONCLUIDA") {
+        // detalha o que falta
+        const [{ count: pend }, { count: terc }] = await Promise.all([
+          c.supabase.from("production_stages").select("id", { count: "exact", head: true }).eq("order_id", op.id).eq("aplicavel", true).neq("status", "CONCLUIDA"),
+          c.supabase.from("production_outsourcing").select("id", { count: "exact", head: true }).eq("order_id", op.id).or("recebido.eq.false,conferido.eq.false"),
+        ]);
+        const faltas: string[] = [];
+        if ((pend || 0) > 0) faltas.push(`${pend} etapa(s) não concluída(s)`);
+        if ((terc || 0) > 0) faltas.push(`${terc} terceirização(ões) não recebida(s)/conferida(s)`);
+        return { ok: false, error: "Produção não concluída — não é possível liberar para execução. Pendências: " + (faltas.join("; ") || "produção em andamento") + "." };
+      }
+    }
+    // EXECUCAO só a partir de PRONTO_EXECUCAO (produção já liberada)
+    if (nova === "EXECUCAO" && atual !== "PRONTO_EXECUCAO") {
+      return { ok: false, error: "A venda precisa estar 'Pronto para execução' (produção concluída e liberada) antes de iniciar a execução." };
+    }
+    if (atual === nova) return { ok: true, id }; // idempotente: clicar duas vezes não duplica
+
     const { error } = await c.supabase.from("sales").update({ situacao: nova, updated_at: new Date().toISOString() }).eq("id", id);
     if (error) return { ok: false, error: error.message };
-    await c.supabase.from("sale_status_history").insert({ organization_id: c.org, sale_id: id, campo: "situacao", de: o.situacao as string, para: nova, user_id: c.uid, obs: obs || null });
+    await c.supabase.from("sale_status_history").insert({ organization_id: c.org, sale_id: id, campo: "situacao", de: atual, para: nova, user_id: c.uid, obs: obs || null });
     await ctxAudit(c, "Comercial", "Situação → " + nova, id);
+
+    // Ao iniciar a execução, cria UMA obra vinculada (idempotente).
+    if (nova === "EXECUCAO") {
+      const { data: jaTem } = await c.supabase.from("obras").select("id").eq("sale_id", id).eq("organization_id", c.org).maybeSingle();
+      if (!jaTem) {
+        await c.supabase.from("obras").insert({
+          organization_id: c.org, store_id: (o.store_id as string) || null, sale_id: id,
+          customer_id: (o.cliente_id as string) || null,
+          nome: `Obra — ${(o.cliente_nome as string) || "venda"}`, status: "execucao", progresso: 0,
+        });
+      }
+    }
     return { ok: true, id };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
