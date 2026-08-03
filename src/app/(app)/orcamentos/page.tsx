@@ -111,10 +111,10 @@ export default function VendasPage() {
           </select>
         </div>
         <div className="v6-card-b" style={{ overflowX: "auto" }}>
-          <table className="v6-tbl" style={{ minWidth: 900 }}>
+          <table className="v6-tbl" style={{ minWidth: 560 }}>
             <thead><tr>
-              <th>Nº</th><th>Cliente / Obra</th><th>Loja</th><th>Vendedor</th><th>Situação</th>
-              <th style={{ textAlign: "right" }}>Total</th><th style={{ textAlign: "right" }}>Recebido</th><th style={{ textAlign: "right" }}>Saldo</th><th>Financeiro</th><th></th>
+              <th>Nº</th><th>Cliente / Obra</th><th className="v6-hide-sm">Loja</th><th className="v6-hide-sm">Vendedor</th><th>Situação</th>
+              <th style={{ textAlign: "right" }}>Total</th><th className="v6-hide-sm" style={{ textAlign: "right" }}>Recebido</th><th className="v6-hide-sm" style={{ textAlign: "right" }}>Saldo</th><th className="v6-hide-sm">Financeiro</th><th></th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 ? (
@@ -125,13 +125,13 @@ export default function VendasPage() {
                   <tr key={o.id}>
                     <td><Link href={`/orcamentos/${o.id}`} style={{ color: "var(--v6-primary)", fontWeight: 700 }}>#{o.numero ?? "—"}</Link></td>
                     <td>{o.cliente_nome || "—"}</td>
-                    <td style={{ color: "var(--v6-muted)" }}>{o.loja_nome}</td>
-                    <td style={{ color: "var(--v6-muted)" }}>{o.vend_nome || "—"}</td>
+                    <td className="v6-hide-sm" style={{ color: "var(--v6-muted)" }}>{o.loja_nome}</td>
+                    <td className="v6-hide-sm" style={{ color: "var(--v6-muted)" }}>{o.vend_nome || "—"}</td>
                     <td>{labelSituacao(o.situacao)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{formatCurrency(o.total)}</td>
-                    <td style={{ textAlign: "right", color: "#16a34a" }}>{formatCurrency(o.recebido)}</td>
-                    <td style={{ textAlign: "right", fontWeight: 600 }}>{formatCurrency(o.saldo)}</td>
-                    <td>{fin}</td>
+                    <td className="v6-hide-sm" style={{ textAlign: "right", color: "#16a34a" }}>{formatCurrency(o.recebido)}</td>
+                    <td className="v6-hide-sm" style={{ textAlign: "right", fontWeight: 600 }}>{formatCurrency(o.saldo)}</td>
+                    <td className="v6-hide-sm">{fin}</td>
                     <td style={{ textAlign: "right" }}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild><button className="v6-icon-btn" style={{ width: 30, height: 30, border: 0, background: "transparent" }}><MoreHorizontal size={16} /></button></DropdownMenuTrigger>

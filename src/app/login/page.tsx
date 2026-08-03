@@ -60,11 +60,22 @@ export default function LoginPage() {
               Do orçamento à obra, tudo em um só lugar.
             </h1>
             <p className="text-sidebar-foreground/70">
-              Especializado em vidraçarias e esquadrias — Conceito Glass.
+              Especializado em vidraçarias e esquadrias. Monte orçamentos em minutos, acompanhe cada etapa e transmita profissionalismo.
             </p>
           </div>
 
-          <span className="text-xs text-sidebar-foreground/50">Ambiente de homologação (staging)</span>
+          <div className="flex gap-9">
+            {[
+              { b: "5 min", s: "Para orçar" },
+              { b: "100%", s: "Do seu segmento" },
+              { b: "1 sistema", s: "Do orçamento à obra" },
+            ].map((m) => (
+              <div key={m.s}>
+                <b className="block text-2xl text-white">{m.b}</b>
+                <span className="text-xs text-sidebar-foreground/50">{m.s}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

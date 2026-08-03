@@ -87,6 +87,7 @@
 .v6-shell .v6-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .v6-shell .v6-tbl th { text-align: left; font-size: 11px; color: var(--v6-muted); text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px; border-bottom: 1px solid var(--v6-border); }
 .v6-shell .v6-tbl td { padding: 9px 8px; border-bottom: 1px solid var(--v6-border-2, #eef2f7); }
+@media (max-width: 720px) { .v6-shell .v6-hide-sm { display: none; } }
 .v6-shell .v6-demo-off { display: none; }
 
 /* ---------- Formulários (paridade V6: .inp / .lbl / grid) ---------- */
