@@ -12,6 +12,7 @@ import {
   type PagarRow, type PagamentoRow,
 } from "@/lib/data/financeiro-actions";
 import { listLojasSel, type Opt } from "@/lib/data/vendas-core";
+import { listAtivos } from "@/lib/data/cadastro-core";
 
 type FormPagar = { descricao: string; fornecedor: string; categoria: string; valor: string; vencimento: string; store_id: string };
 const vazio: FormPagar = { descricao: "", fornecedor: "", categoria: "", valor: "0", vencimento: "", store_id: "" };
@@ -34,6 +35,7 @@ export default function PagarPage() {
   const [contas, setContas] = useState<PagarRow[]>([]);
   const [perm, setPerm] = useState({ pagar: false, estornar: false, excluir: false });
   const [lojas, setLojas] = useState<Opt[]>([]);
+  const [categorias, setCategorias] = useState<string[]>([]);
   const [erro, setErro] = useState(""); const [msg, setMsg] = useState(""); const [q, setQ] = useState("");
   const [form, setForm] = useState<FormPagar | null>(null); const [editId, setEditId] = useState<string | null>(null);
   const [pay, setPay] = useState<PagarRow | null>(null); const [valorPay, setValorPay] = useState(""); const [formaPay, setFormaPay] = useState("Pix");
@@ -48,7 +50,11 @@ export default function PagarPage() {
     setContas(lst); setPerm({ pagar: !!r.canPagar, estornar: !!r.canEstornar, excluir: !!r.canExcluir }); setErro("");
     return lst;
   }, []);
-  useEffect(() => { carregar(); listLojasSel().then(setLojas).catch(() => {}); }, [carregar]);
+  useEffect(() => {
+    carregar();
+    listLojasSel().then(setLojas).catch(() => {});
+    listAtivos("financial_categories", "id,nome").then((cs) => setCategorias(cs.map((c) => c.nome))).catch(() => {});
+  }, [carregar]);
 
   const lista = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -165,7 +171,11 @@ export default function PagarPage() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ gridColumn: "1 / -1" }}><label style={lbl}>Descrição da despesa *</label><input style={ctrl} value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} /></div>
               <div><label style={lbl}>Fornecedor</label><input style={ctrl} value={form.fornecedor} onChange={(e) => setForm({ ...form, fornecedor: e.target.value })} /></div>
-              <div><label style={lbl}>Categoria</label><input style={ctrl} value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} /></div>
+              <div>
+                <label style={lbl}>Categoria</label>
+                <input style={ctrl} list="cats-pagar" placeholder="Selecione ou digite..." value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} />
+                <datalist id="cats-pagar">{categorias.map((cnome) => <option key={cnome} value={cnome} />)}</datalist>
+              </div>
               <div><label style={lbl}>Valor (R$)</label><input style={ctrl} type="number" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} /></div>
               <div><label style={lbl}>Vencimento</label><input style={ctrl} type="date" value={form.vencimento} onChange={(e) => setForm({ ...form, vencimento: e.target.value })} /></div>
               <div style={{ gridColumn: "1 / -1" }}><label style={lbl}>Loja *</label>
