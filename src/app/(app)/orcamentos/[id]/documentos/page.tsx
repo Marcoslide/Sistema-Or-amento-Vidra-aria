@@ -8,15 +8,19 @@ import { ArrowLeft, Printer, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getVenda, type VendaFull } from "@/lib/data/vendas-core";
 import { getEmpresa, type Empresa } from "@/lib/data/empresa-actions";
+import { qtdMedida, type Regra } from "@/lib/commercial/calc";
+import { labelSituacao } from "@/lib/commercial/situacao";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 type Loja = { nome: string; nome_comercial: string; cnpj: string; cidade: string; uf: string; logo_url: string; tel: string; email: string };
 type Cliente = { nome: string; doc: string; endereco: string; tel: string; email: string };
+type ProdInfo = { descricao: string; larguraMolduraCm: number; multiplicadorCorte: number };
 
 const TIPOS = [
   { v: "contrato", l: "Contrato" },
   { v: "termo", l: "Termo de entrega" },
   { v: "recibo", l: "Recibo" },
+  { v: "op", l: "Ordem de produção" },
 ];
 
 export default function DocumentosPage() {
@@ -25,6 +29,7 @@ export default function DocumentosPage() {
   const [emp, setEmp] = useState<Empresa | null>(null);
   const [loja, setLoja] = useState<Loja | null>(null);
   const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [prods, setProds] = useState<Record<string, ProdInfo>>({});
   const [tipo, setTipo] = useState("contrato");
   const [erro, setErro] = useState(""); const [loading, setLoading] = useState(true);
 
@@ -42,6 +47,14 @@ export default function DocumentosPage() {
         const { data: cl } = await s.from("customers").select("nome,doc,tel,email,logradouro,numero,bairro,cidade,uf").eq("id", v.cliente_id).maybeSingle();
         if (cl) setCliente({ nome: (cl.nome as string) || v.cliente_nome, doc: (cl.doc as string) || "", tel: (cl.tel as string) || "", email: (cl.email as string) || "", endereco: [cl.logradouro, cl.numero, cl.bairro, cl.cidade && `${cl.cidade}${cl.uf ? "/" + cl.uf : ""}`].filter(Boolean).join(", ") });
       } else setCliente({ nome: v.cliente_nome, doc: "", tel: "", email: "", endereco: "" });
+      // produtos (para medidas técnicas / metro linear na Ordem de Produção)
+      const ids = Array.from(new Set(v.ambientes.flatMap((a) => a.itens.map((i) => i.product_id).filter(Boolean)))) as string[];
+      if (ids.length) {
+        const { data: pd } = await s.from("products").select("id,descricao,largura_moldura_cm,multiplicador_corte").in("id", ids);
+        const map: Record<string, ProdInfo> = {};
+        (pd || []).forEach((p) => { map[p.id as string] = { descricao: (p.descricao as string) || "Item", larguraMolduraCm: Number(p.largura_moldura_cm) || 0, multiplicadorCorte: Number(p.multiplicador_corte) || 8 }; });
+        setProds(map);
+      }
       setErro("");
     } catch (e) { setErro((e as Error).message); } finally { setLoading(false); }
   }, [params.id]);
@@ -138,6 +151,55 @@ export default function DocumentosPage() {
             <p className="pt-2 text-xs text-neutral-600">{emp?.cidade || ""}{emp?.cidade ? ", " : ""}____/____/______</p>
             <div className="pt-10">
               <div className="mx-auto w-72 border-t pt-2 text-center text-xs">{emp?.representante || nomeEmp}<br />{nomeEmp}{emp?.cnpj ? ` · CNPJ ${emp.cnpj}` : ""}</div>
+            </div>
+          </div>
+        )}
+
+        {tipo === "op" && (
+          <div className="space-y-3 pt-4 text-sm">
+            <p className="text-center text-base font-bold">ORDEM DE PRODUÇÃO — Nº {venda.numero ?? ""}</p>
+            <div className="rounded border bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
+              Documento técnico interno — <b>não contém valores financeiros</b>. Situação: {labelSituacao(venda.situacao)}.
+            </div>
+            <p><b>Cliente:</b> {cliente?.nome || venda.cliente_nome}</p>
+            {venda.obra_nome && <p><b>Obra:</b> {venda.obra_nome}{venda.obra_endereco ? ` — ${venda.obra_endereco}` : ""}</p>}
+            {venda.ambientes.map((a, ai) => (
+              <div key={ai} className="pt-2">
+                <p className="mb-1 font-semibold">{a.nome}</p>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b text-left text-neutral-500">
+                      <th className="py-1">Produto</th><th className="py-1">Regra</th><th className="py-1 text-right">Qtd</th>
+                      <th className="py-1 text-right">Larg. (cm)</th><th className="py-1 text-right">Alt. (cm)</th><th className="py-1 text-right">Metragem / m linear</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {a.itens.flatMap((it, ii) => {
+                      const p = it.product_id ? prods[it.product_id] : undefined;
+                      return it.medidas.map((m, mi) => {
+                        const met = qtdMedida(it.regra as Regra, { l: m.l, a: m.a, q: m.q, unit: m.unit as "cm" | "mm" | "m" }, p);
+                        const toCm = (v: number, u: string) => u === "cm" ? v : u === "mm" ? v / 10 : v * 100;
+                        return (
+                          <tr key={`${ii}-${mi}`} className="border-b border-neutral-100 align-top">
+                            <td className="py-1">{p?.descricao || "Item"}</td>
+                            <td className="py-1">{it.regra}</td>
+                            <td className="py-1 text-right">{m.q}</td>
+                            <td className="py-1 text-right">{toCm(m.l, m.unit).toFixed(1)}</td>
+                            <td className="py-1 text-right">{toCm(m.a, m.unit).toFixed(1)}</td>
+                            <td className="py-1 text-right">{met.toFixed(2)}{it.regra === "MOLDURA" || it.regra === "ML" ? " m" : it.regra === "M2" ? " m²" : ""}</td>
+                          </tr>
+                        );
+                      });
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+            {venda.obs && <p className="pt-2"><b>Observação:</b> {venda.obs}</p>}
+            {venda.obs_interna && <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2"><b>Observação interna (produção):</b> {venda.obs_interna}</p>}
+            <div className="grid grid-cols-2 gap-8 pt-8 text-xs">
+              <div className="border-t pt-2 text-center">Produção / responsável</div>
+              <div className="border-t pt-2 text-center">Conferência</div>
             </div>
           </div>
         )}
