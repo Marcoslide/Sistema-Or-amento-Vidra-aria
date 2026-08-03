@@ -18,17 +18,21 @@ Todos os arquivos são idempotentes (`if not exists` / `on conflict`).
 
 | # | Arquivo | O que faz | Depende de |
 |---|---------|-----------|------------|
-| 1 | `supabase/schema.sql` | Cria o modelo multiloja (organizações, lojas, clientes, produtos, vendas, financeiro, contas, operadoras…) | pgcrypto (padrão no Supabase) |
+| 1 | `supabase/schema.sql` | Modelo multiloja (organizações, lojas, clientes, produtos, vendas, financeiro, contas, operadoras…) | pgcrypto (padrão no Supabase) |
 | 2 | `supabase/rls.sql` | Helpers (`app_org_id`, `app_store_ids`, `app_seller_*`) + políticas RLS por organização/loja/vendedor | passo 1 |
-| 3 | `supabase/migrations/0001_commercial.sql` | Colunas comerciais em `sales`/histórico + RPC `fn_transformar_venda` (transformar orçamento em venda, transacional e idempotente) | passos 1 e 2 |
-| 4 | `supabase/migrations/0002_fix_rls_store_ids.sql` | Corretiva: `app_store_ids()` via UNION (corrige "more than one row returned by a subquery" ao salvar venda com 2+ lojas) | passo 2 |
-| 5 | `supabase/migrations/0003_financeiro.sql` | Financeiro: `sale_extra_costs`, `cost_centers` + RPCs `fn_receber_parcela`/`fn_estornar_recebimento`/`fn_pagar_conta`/`fn_estornar_pagamento` + RLS | passos 1 e 2 |
-| 6 | `supabase/migrations/0005_comercial_obra.sql` | Aditiva: `sales.obra_nome`, `sales.obra_endereco` (campo Obra no orçamento e no PDF) | passo 1 |
-| 7 | `supabase/seed-staging.sql` | Seed exclusivo de homologação (ver §3) — reexecutar concede permissões novas | passo 1 |
+| 3 | `supabase/migrations/0001_commercial.sql` | Colunas comerciais em `sales`/histórico + RPC `fn_transformar_venda` | passos 1 e 2 |
+| 4 | `supabase/migrations/0002_fix_rls_store_ids.sql` | Corretiva: `app_store_ids()` via UNION | passo 2 |
+| 5 | `supabase/migrations/0003_financeiro.sql` | Financeiro: `sale_extra_costs`, `cost_centers` + RPCs receber/pagar/estorno | passos 1 e 2 |
+| 6 | `supabase/migrations/0004_producao.sql` | **Produção**: ordens/processos/etapas/terceirizações + RPCs `fn_iniciar_producao`/`fn_concluir_producao` (bloqueio real) + RLS | passos 1 e 2 |
+| 7 | `supabase/migrations/0005_comercial_obra.sql` | Aditiva: `sales.obra_nome`, `sales.obra_endereco` | passo 1 |
+| 8 | `supabase/migrations/0006_identidade_empresa.sql` | Aditiva: identidade da empresa (`organizations`) e das lojas (`stores`) — fantasia, razão, IE/IM, endereço, representante, foro, `logo_url` | passo 1 |
+| 9 | `supabase/migrations/0007_categorias_financeiras.sql` | `financial_categories` + RLS + permissão | passos 1 e 2 |
+| 10 | `supabase/migrations/0008_obras.sql` | `obras`, `obra_checklist`, `obra_diario` + RLS | passos 1 e 2 |
+| 11 | `supabase/migrations/0009_agenda.sql` | `agenda_eventos` + RLS | passos 1 e 2 |
+| 12 | `supabase/migrations/0010_reclamacoes.sql` | `reclamacoes`, `reclamacao_historico` + RLS | passos 1 e 2 |
+| 13 | `supabase/seed-staging.sql` | Seed de homologação (ver §3) — reexecutar concede permissões novas | passo 1 |
 
-> Não existe `0004` nesta branch: a migration `0004_producao.sql` pertence ao módulo **Produção**
-> (branch `feature/app5-producao`), deferido para depois do MVP. A ausência do 0004 **não** afeta
-> a aplicação — o Supabase aplica por ordem de nome de arquivo e o 0005 é autossuficiente.
+> Aplicar por ordem de número de arquivo. Todos idempotentes (`if not exists` / `on conflict`).
 
 ## 2. Como aplicar
 
@@ -81,12 +85,18 @@ configure as três apontando para o projeto de **homologação**.
 
 ## 6. Escopo do MVP
 
-**Incluído e funcional:** Login/sessão/RBAC · Dashboard (dados reais) · Vendas (lista/ciclo) ·
-Orçamento (criar/editar/duplicar/transformar em venda/PDF, campo Obra, painel Resumo à direita,
-regra MOLDURA, multiloja) · Financeiro (Contas a receber/pagar, Caixa, Ponto de equilíbrio,
-Análise por venda) · Cadastros com exclusão segura (Clientes, Vendedores, Produtos, Famílias,
-Fornecedores, Operadoras, Lojas, Contas, Centro de custos, Hora-homem/máquina, Depreciação) ·
-Configurações (hub de cadastros) · Mobile (drawer V6) · PDFs.
+**Incluído e funcional:** Login/sessão/RBAC · Dashboard (dados reais, filtro por período e por loja) ·
+Vendas (lista/ciclo) · Orçamento (criar/editar/duplicar/transformar em venda/PDF, campo Obra, painel
+Resumo à direita, regra MOLDURA, multiloja) · Financeiro (Contas a receber/pagar, Caixa, Ponto de
+equilíbrio, Análise por venda, **Categorias financeiras**) · **Produção** (ordens, etapas,
+terceirizações, bloqueio real de conclusão) · **Obras** (kanban, diário, checklist, progresso, sem
+valores) · **Agenda** (visitas/instalações, reagendamento) · **Reclamações** (fluxo de status +
+histórico) · **Documentos** (contrato, termo de entrega, recibo + PDF do cliente, com identidade
+configurável da empresa) · **Configurações → Empresa e Lojas** (identidade completa + logomarca) ·
+demais cadastros com exclusão segura · Mobile/PWA (drawer V6, manifest, service worker, ícones) · PDFs.
 
-**Deferido (sinalizado "Em desenvolvimento", sem rota quebrada):** Obras, Agenda, Reclamações,
-Produção completa, Documentos avançados, refinamentos visuais.
+**Pendências conhecidas (não bloqueiam homologação):** restyle visual V6 das telas de Produção
+(hoje funcionais no estilo shadcn); aprofundamento do construtor (cadastro rápido de cliente inline,
+condição de pagamento/entrada, observação interna, "marcar como enviado"); anexos/fotos e assinatura
+digital em Obras/Reclamações; relatório de obra e ordem de produção como documentos imprimíveis
+dedicados.
