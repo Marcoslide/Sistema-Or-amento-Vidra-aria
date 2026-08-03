@@ -13,34 +13,41 @@ import { labelSituacao } from "@/lib/commercial/situacao";
 
 const ABAS = [
   { v: "TODOS", l: "Todos" }, { v: "ORCAMENTO", l: "Orçamentos" }, { v: "VENDA_CONFIRMADA", l: "Vendas confirmadas" },
-  { v: "PRODUCAO", l: "Em produção" }, { v: "EXECUCAO", l: "Em execução" }, { v: "FINALIZADA", l: "Finalizados" }, { v: "CANCELADO", l: "Cancelados" },
+  { v: "PRODUCAO", l: "Em produção" }, { v: "PRONTO_EXECUCAO", l: "Prontos para execução" },
+  { v: "EXECUCAO", l: "Em execução" }, { v: "FINALIZADA", l: "Finalizados" }, { v: "CANCELADO", l: "Cancelados" },
 ];
 
 export default function VendasPage() {
   const [rows, setRows] = useState<VendaRica[]>([]);
   const [erro, setErro] = useState(""); const [msg, setMsg] = useState("");
   const [q, setQ] = useState(""); const [aba, setAba] = useState("TODOS");
+  const [fVend, setFVend] = useState(""); const [fFin, setFFin] = useState("");
 
   const carregar = useCallback(() => {
     listVendasRicas().then((d) => { setRows(d); setErro(""); }).catch((e) => { setRows([]); setErro((e as Error).message); });
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
 
+  const finLabel = (o: VendaRica) => o.venda_gerada ? (o.saldo <= 0 ? "Recebido" : o.recebido > 0 ? "Parcial" : "A receber") : "—";
+  const vendedores = useMemo(() => Array.from(new Set(rows.map((o) => o.vend_nome).filter(Boolean))).sort() as string[], [rows]);
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     return rows.filter((o) => {
       const mq = !s || (o.cliente_nome || "").toLowerCase().includes(s) || String(o.numero ?? "").includes(s) || (o.vend_nome || "").toLowerCase().includes(s);
       const ma = aba === "TODOS" || o.situacao === aba;
-      return mq && ma;
+      const mv = !fVend || o.vend_nome === fVend;
+      const mf = !fFin || finLabel(o) === fFin;
+      return mq && ma && mv && mf;
     });
-  }, [rows, q, aba]);
+  }, [rows, q, aba, fVend, fFin]);
 
   const conta = (chave: string) => rows.filter((o) => o.situacao === chave).length;
   const cards = [
     { ic: <FileText size={20} />, lb: "Orçamentos", vl: conta("ORCAMENTO") },
     { ic: <Tag size={20} />, lb: "Aguardando produção", vl: conta("VENDA_CONFIRMADA") },
     { ic: <Factory size={20} />, lb: "Em produção", vl: conta("PRODUCAO") },
-    { ic: <CheckCircle2 size={20} />, lb: "Em execução", vl: conta("EXECUCAO") },
+    { ic: <CheckCircle2 size={20} />, lb: "Prontos p/ execução", vl: conta("PRONTO_EXECUCAO") },
     { ic: <Layers size={20} />, lb: "Finalizados", vl: conta("FINALIZADA") },
   ];
   const saldoReceber = useMemo(() => rows.reduce((s, o) => s + o.saldo, 0), [rows]);
@@ -90,8 +97,18 @@ export default function VendasPage() {
 
       {/* busca + tabela */}
       <div className="v6-card">
-        <div className="v6-card-b" style={{ paddingBottom: 0 }}>
+        <div className="v6-card-b" style={{ paddingBottom: 0, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <div className="v6-search" style={{ maxWidth: 340 }}><Search /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Número, cliente, obra, vendedor..." /></div>
+          <select className="v6-inp" style={{ height: 38, width: "auto" }} value={fVend} onChange={(e) => setFVend(e.target.value)}>
+            <option value="">Todos os vendedores</option>
+            {vendedores.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+          <select className="v6-inp" style={{ height: 38, width: "auto" }} value={fFin} onChange={(e) => setFFin(e.target.value)}>
+            <option value="">Financeiro: todos</option>
+            <option value="A receber">A receber</option>
+            <option value="Parcial">Parcial</option>
+            <option value="Recebido">Recebido</option>
+          </select>
         </div>
         <div className="v6-card-b" style={{ overflowX: "auto" }}>
           <table className="v6-tbl" style={{ minWidth: 900 }}>

@@ -1,11 +1,12 @@
 // Situação comercial da venda (ciclo). Rótulos e variantes de badge centralizados.
 export type Situacao =
-  | "ORCAMENTO" | "VENDA_CONFIRMADA" | "PRODUCAO" | "EXECUCAO" | "FINALIZADA" | "CANCELADO";
+  | "ORCAMENTO" | "VENDA_CONFIRMADA" | "PRODUCAO" | "PRONTO_EXECUCAO" | "EXECUCAO" | "FINALIZADA" | "CANCELADO";
 
 export const SITUACAO_LABEL: Record<string, string> = {
   ORCAMENTO: "Orçamento",
   VENDA_CONFIRMADA: "Venda confirmada",
   PRODUCAO: "Em produção",
+  PRONTO_EXECUCAO: "Pronto para execução",
   EXECUCAO: "Em execução",
   FINALIZADA: "Finalizada",
   CANCELADO: "Cancelada",
@@ -15,15 +16,18 @@ export const SITUACAO_VARIANT: Record<string, "default" | "secondary" | "success
   ORCAMENTO: "muted",
   VENDA_CONFIRMADA: "default",
   PRODUCAO: "warning",
+  PRONTO_EXECUCAO: "default",
   EXECUCAO: "warning",
   FINALIZADA: "success",
   CANCELADO: "destructive",
 };
 
 // Próximos passos permitidos no ciclo (avanço comercial após virar venda).
+// Produção → Pronto para execução → Em execução → Finalizada (fluxo V6).
 export const SITUACAO_PROXIMAS: Record<string, string[]> = {
   VENDA_CONFIRMADA: ["PRODUCAO", "CANCELADO"],
-  PRODUCAO: ["EXECUCAO", "CANCELADO"],
+  PRODUCAO: ["PRONTO_EXECUCAO", "CANCELADO"],
+  PRONTO_EXECUCAO: ["EXECUCAO", "CANCELADO"],
   EXECUCAO: ["FINALIZADA", "CANCELADO"],
 };
 

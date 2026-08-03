@@ -48,7 +48,7 @@ export async function getDashboard(periodo: "hoje" | "semana" | "mes" | "ano" = 
     const vendas = confPeriodo.length;
     const ticketMedio = vendas > 0 ? faturamento / vendas : 0;
     const orcAberto = rows.filter((r) => (r.situacao || r.status) === "ORCAMENTO").length;
-    const obrasExec = rows.filter((r) => ["PRODUCAO", "EXECUCAO"].includes(r.situacao || r.status)).length;
+    const obrasExec = rows.filter((r) => ["PRODUCAO", "PRONTO_EXECUCAO", "EXECUCAO"].includes(r.situacao || r.status)).length;
 
     // a receber = títulos - recebimentos não estornados
     let rq = c.supabase.from("receivables").select("valor,store_id");
