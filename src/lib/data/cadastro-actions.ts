@@ -65,7 +65,7 @@ const REG: Record<string, EntityDef> = {
   "categorias-financeiras": {
     table: "financial_categories", label: "categoria financeira", deletePerm: "fin.excluir_categorias",
     vinculos: [
-      { table: "payables", col: "categoria", byName: true, label: "contas a pagar" },
+      { table: "payables", col: "category_id", label: "contas a pagar" },
     ],
   },
   produtos: {

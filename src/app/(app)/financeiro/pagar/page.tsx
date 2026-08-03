@@ -14,8 +14,8 @@ import {
 import { listLojasSel, type Opt } from "@/lib/data/vendas-core";
 import { listAtivos } from "@/lib/data/cadastro-core";
 
-type FormPagar = { descricao: string; fornecedor: string; categoria: string; valor: string; vencimento: string; store_id: string };
-const vazio: FormPagar = { descricao: "", fornecedor: "", categoria: "", valor: "0", vencimento: "", store_id: "" };
+type FormPagar = { descricao: string; fornecedor: string; categoria: string; category_id: string; valor: string; vencimento: string; store_id: string };
+const vazio: FormPagar = { descricao: "", fornecedor: "", categoria: "", category_id: "", valor: "0", vencimento: "", store_id: "" };
 
 type StatusInfo = { label: string; style: React.CSSProperties };
 function statusConta(c: PagarRow): StatusInfo {
@@ -35,7 +35,7 @@ export default function PagarPage() {
   const [contas, setContas] = useState<PagarRow[]>([]);
   const [perm, setPerm] = useState({ pagar: false, estornar: false, excluir: false });
   const [lojas, setLojas] = useState<Opt[]>([]);
-  const [categorias, setCategorias] = useState<string[]>([]);
+  const [categorias, setCategorias] = useState<Array<{ id: string; nome: string }>>([]);
   const [erro, setErro] = useState(""); const [msg, setMsg] = useState(""); const [q, setQ] = useState("");
   const [form, setForm] = useState<FormPagar | null>(null); const [editId, setEditId] = useState<string | null>(null);
   const [pay, setPay] = useState<PagarRow | null>(null); const [valorPay, setValorPay] = useState(""); const [formaPay, setFormaPay] = useState("Pix");
@@ -53,7 +53,7 @@ export default function PagarPage() {
   useEffect(() => {
     carregar();
     listLojasSel().then(setLojas).catch(() => {});
-    listAtivos("financial_categories", "id,nome").then((cs) => setCategorias(cs.map((c) => c.nome))).catch(() => {});
+    listAtivos("financial_categories", "id,nome").then(setCategorias).catch(() => {});
   }, [carregar]);
 
   const lista = useMemo(() => {
@@ -149,7 +149,7 @@ export default function PagarPage() {
                         <DropdownMenuTrigger asChild><button className="v6-icon-btn" style={{ width: 30, height: 30, border: 0, background: "transparent" }}><MoreHorizontal size={16} /></button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           {perm.pagar && c.saldo > 0 && !c.cancelada && <DropdownMenuItem onClick={() => abrirPagar(c)}>Pagar</DropdownMenuItem>}
-                          <DropdownMenuItem onClick={() => { setForm({ descricao: c.descricao, fornecedor: c.fornecedor || "", categoria: c.categoria || "", valor: String(c.valor), vencimento: c.vencimento || "", store_id: c.store_id }); setEditId(c.id); }}>Editar</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setForm({ descricao: c.descricao, fornecedor: c.fornecedor || "", categoria: c.categoria || "", category_id: c.category_id || "", valor: String(c.valor), vencimento: c.vencimento || "", store_id: c.store_id }); setEditId(c.id); }}>Editar</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => abrirVer(c)}>Pagamentos</DropdownMenuItem>
                           {perm.excluir && <><DropdownMenuSeparator /><DropdownMenuItem className="text-destructive" onClick={() => excluir(c)}>Excluir</DropdownMenuItem></>}
                         </DropdownMenuContent>
@@ -173,8 +173,11 @@ export default function PagarPage() {
               <div><label style={lbl}>Fornecedor</label><input style={ctrl} value={form.fornecedor} onChange={(e) => setForm({ ...form, fornecedor: e.target.value })} /></div>
               <div>
                 <label style={lbl}>Categoria</label>
-                <input style={ctrl} list="cats-pagar" placeholder="Selecione ou digite..." value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} />
-                <datalist id="cats-pagar">{categorias.map((cnome) => <option key={cnome} value={cnome} />)}</datalist>
+                <select style={ctrl} value={form.category_id} onChange={(e) => { const cat = categorias.find((x) => x.id === e.target.value); setForm({ ...form, category_id: e.target.value, categoria: cat?.nome || "" }); }}>
+                  <option value="">— selecione —</option>
+                  {categorias.map((cat) => <option key={cat.id} value={cat.id}>{cat.nome}</option>)}
+                  {form.category_id === "" && form.categoria && <option value="" disabled>(legado: {form.categoria})</option>}
+                </select>
               </div>
               <div><label style={lbl}>Valor (R$)</label><input style={ctrl} type="number" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} /></div>
               <div><label style={lbl}>Vencimento</label><input style={ctrl} type="date" value={form.vencimento} onChange={(e) => setForm({ ...form, vencimento: e.target.value })} /></div>

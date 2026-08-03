@@ -197,7 +197,7 @@ create table if not exists payables ( -- contas a pagar
   store_id uuid not null references stores(id),
   descricao text not null,               -- descrição da despesa (obrigatória)
   fornecedor text,                       -- opcional
-  categoria text, valor numeric(14,2) not null default 0, emissao date, competencia date, vencimento date,
+  categoria text, category_id uuid, valor numeric(14,2) not null default 0, emissao date, competencia date, vencimento date,
   forma text, conta_fin text, ocorrencia text default 'Única', cancelada boolean default false,
   created_by uuid, created_at timestamptz not null default now()
 );

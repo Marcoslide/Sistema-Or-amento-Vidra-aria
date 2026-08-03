@@ -115,14 +115,14 @@ export async function getCaixaData(storeId?: string): Promise<{ ok: boolean; err
 
 // ---------------- CONTAS A PAGAR ----------------
 export type PagarRow = {
-  id: string; descricao: string; fornecedor: string | null; categoria: string | null; valor: number;
+  id: string; descricao: string; fornecedor: string | null; categoria: string | null; category_id: string | null; valor: number;
   pago: number; saldo: number; vencimento: string | null; store_id: string; cancelada: boolean;
 };
 export async function getPagarData(): Promise<{ ok: boolean; error?: string; contas?: PagarRow[]; canPagar?: boolean; canEstornar?: boolean; canExcluir?: boolean }> {
   try {
     const c = await getCtx();
     if (!(await ctxHasPerm(c, "fin.contas_pagar"))) return { ok: false, error: "Sem permissão para Contas a Pagar." };
-    const { data: pbs } = await c.supabase.from("payables").select("id,descricao,fornecedor,categoria,valor,vencimento,store_id,cancelada").order("vencimento");
+    const { data: pbs } = await c.supabase.from("payables").select("id,descricao,fornecedor,categoria,category_id,valor,vencimento,store_id,cancelada").order("vencimento");
     const ids = (pbs || []).map((p) => p.id as string);
     const { data: pays } = ids.length
       ? await c.supabase.from("payable_payments").select("payable_id,valor,estornado").in("payable_id", ids)
@@ -133,7 +133,7 @@ export async function getPagarData(): Promise<{ ok: boolean; error?: string; con
       const valor = Number(p.valor) || 0; const pago = Number(pagoBy[p.id as string] || 0);
       return {
         id: p.id as string, descricao: (p.descricao as string) || "Despesa", fornecedor: (p.fornecedor as string) || null,
-        categoria: (p.categoria as string) || null, valor, pago, saldo: Math.round((valor - pago) * 100) / 100,
+        categoria: (p.categoria as string) || null, category_id: (p.category_id as string) || null, valor, pago, saldo: Math.round((valor - pago) * 100) / 100,
         vencimento: (p.vencimento as string) || null, store_id: p.store_id as string, cancelada: Boolean(p.cancelada),
       };
     });
@@ -142,7 +142,7 @@ export async function getPagarData(): Promise<{ ok: boolean; error?: string; con
 }
 
 export async function salvarPagar(id: string | null, dados: {
-  descricao: string; fornecedor?: string; categoria?: string; valor: number; vencimento?: string | null;
+  descricao: string; fornecedor?: string; categoria?: string; category_id?: string | null; valor: number; vencimento?: string | null;
   competencia?: string | null; forma?: string; conta_fin?: string; ocorrencia?: string; store_id: string;
 }): Promise<R & { id?: string }> {
   try {
@@ -150,8 +150,14 @@ export async function salvarPagar(id: string | null, dados: {
     if (!(await ctxHasPerm(c, "fin.contas_pagar"))) return { ok: false, error: "Sem permissão." };
     if (!dados.descricao?.trim()) return { ok: false, error: "Informe a descrição da despesa." };
     if (!dados.store_id) return { ok: false, error: "Selecione a loja (obrigatória)." };
+    // Relacionamento real: se veio category_id, deriva o texto legado do nome da categoria.
+    let categoriaTxt = dados.categoria || null;
+    if (dados.category_id) {
+      const { data: fc } = await c.supabase.from("financial_categories").select("nome").eq("id", dados.category_id).eq("organization_id", c.org).maybeSingle();
+      if (fc?.nome) categoriaTxt = fc.nome as string;
+    }
     const base = {
-      descricao: dados.descricao.trim(), fornecedor: dados.fornecedor || null, categoria: dados.categoria || null,
+      descricao: dados.descricao.trim(), fornecedor: dados.fornecedor || null, categoria: categoriaTxt, category_id: dados.category_id || null,
       valor: dados.valor || 0, vencimento: dados.vencimento || null, competencia: dados.competencia || null,
       forma: dados.forma || null, conta_fin: dados.conta_fin || null, ocorrencia: dados.ocorrencia || "Única",
       store_id: dados.store_id,
