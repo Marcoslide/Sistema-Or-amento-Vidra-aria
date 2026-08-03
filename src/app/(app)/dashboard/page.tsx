@@ -26,8 +26,15 @@ export default function DashboardPage() {
   const maxEvol = useMemo(() => Math.max(1, ...((d?.evolucao || []).map((e) => e.valor))), [d]);
   const metaPct = d && d.meta > 0 ? Math.min(100, Math.round((d.realizado / d.meta) * 100)) : 0;
 
+  const deltaTxt = d ? (d.deltaFaturamentoPct === 0 ? "" : `${d.deltaFaturamentoPct > 0 ? "▲" : "▼"} ${Math.abs(d.deltaFaturamentoPct)}% vs anterior`) : "";
+  const atualizado = useMemo(() => {
+    if (!d?.atualizadoEm) return "";
+    try { return new Date(d.atualizadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }); } catch { return ""; }
+  }, [d]);
+  const maxLoja = useMemo(() => Math.max(1, ...((d?.porLoja || []).map((l) => l.total))), [d]);
+
   const kpis = d ? [
-    { ic: <Percent size={20} />, lb: "Faturamento", vl: formatCurrency(d.faturamento), hn: "no período" },
+    { ic: <Percent size={20} />, lb: "Faturamento", vl: formatCurrency(d.faturamento), hn: deltaTxt || "no período" },
     { ic: <Tag size={20} />, lb: "Vendas", vl: String(d.vendas), hn: "confirmadas" },
     { ic: <FileText size={20} />, lb: "Ticket médio", vl: formatCurrency(d.ticketMedio), hn: `${d.vendas} vendas` },
     { ic: <Clock size={20} />, lb: "Orç. em aberto", vl: String(d.orcAberto), hn: "aguardando" },
@@ -42,7 +49,7 @@ export default function DashboardPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div>
             <div className="v6-page-title">Visão geral</div>
-            <div className="v6-page-desc">Acompanhe vendas, obras, financeiro e operação.</div>
+            <div className="v6-page-desc">Acompanhe vendas, obras, financeiro e operação.{atualizado ? ` Atualizado ${atualizado}.` : ""}</div>
           </div>
           <Link href="/orcamentos/novo" className="v6-btn v6-btn-primary" style={{ marginLeft: "auto" }}><Plus /> Novo orçamento</Link>
         </div>
@@ -160,6 +167,59 @@ export default function DashboardPage() {
                 );
               })}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Painéis operacionais V6 */}
+      <div className="v6-grid" style={{ gridTemplateColumns: "repeat(2,minmax(0,1fr))", marginTop: 16, alignItems: "start" }}>
+        <div className="v6-card">
+          <div className="v6-card-h"><div className="v6-card-title">Comparativo por operação</div><div className="v6-card-desc">Faturamento por loja no período</div></div>
+          <div className="v6-card-b v6-cols" style={{ gap: 10 }}>
+            {(d?.porLoja || []).length === 0 ? <div className="v6-lb">Sem dados no período.</div> :
+              d!.porLoja.map((l) => (
+                <div key={l.loja}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span className="v6-lb">{l.loja}</span><b>{formatCurrency(l.total)}</b></div>
+                  <div className="v6-bar" style={{ marginTop: 4 }}><i style={{ width: `${(l.total / maxLoja) * 100}%` }} /></div>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        <div className="v6-card">
+          <div className="v6-card-h"><div className="v6-card-title">Obras em andamento</div></div>
+          <div className="v6-card-b">
+            {(d?.obrasAndamento || []).length === 0 ? <div className="v6-lb">Nenhuma obra em andamento.</div> :
+              d!.obrasAndamento.map((o, i) => (
+                <div key={i} style={{ padding: "7px 0", borderBottom: "1px solid #eef2f7" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span>{o.nome}</span><b>{o.progresso}%</b></div>
+                  <div className="v6-bar" style={{ marginTop: 4 }}><i style={{ width: `${o.progresso}%` }} /></div>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        <div className="v6-card">
+          <div className="v6-card-h"><div className="v6-card-title">Agenda de hoje</div></div>
+          <div className="v6-card-b">
+            {(d?.agendaHoje || []).length === 0 ? <div className="v6-lb">Sem compromissos para hoje.</div> :
+              d!.agendaHoje.map((e, i) => (
+                <div key={i} style={{ display: "flex", gap: 10, fontSize: 13, padding: "6px 0", borderBottom: "1px solid #eef2f7" }}>
+                  <b style={{ minWidth: 44 }}>{e.hora || "—"}</b><span style={{ textTransform: "capitalize", color: "var(--v6-muted)" }}>{e.tipo}</span><span>{e.cliente}</span>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        <div className="v6-card">
+          <div className="v6-card-h"><div className="v6-card-title">Alertas</div></div>
+          <div className="v6-card-b">
+            {(d?.alertas || []).length === 0 ? <div className="v6-lb">Tudo em dia.</div> :
+              d!.alertas.map((a, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, fontSize: 13, padding: "6px 0", borderBottom: "1px solid #eef2f7", color: "#b45309" }}>
+                  <span>•</span><span>{a}</span>
+                </div>
+              ))}
           </div>
         </div>
       </div>

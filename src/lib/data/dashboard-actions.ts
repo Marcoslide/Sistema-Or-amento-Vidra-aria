@@ -8,18 +8,27 @@ import { getCtx } from "@/lib/data/server-ctx";
 export type DashboardData = {
   faturamento: number; vendas: number; ticketMedio: number; orcAberto: number;
   obrasExec: number; aReceber: number;
+  faturamentoAnterior: number; deltaFaturamentoPct: number;
   evolucao: { mes: string; valor: number }[];
   meta: number; realizado: number;
   vendasRecentes: { id: string; numero: number | null; cliente: string; situacao: string; total: number; criado: string }[];
   melhoresVendedores: { nome: string; total: number }[];
   funil: { label: string; chave: string; n: number }[];
+  porLoja: { loja: string; total: number }[];
+  obrasAndamento: { nome: string; cliente: string; progresso: number; status: string }[];
+  agendaHoje: { hora: string; tipo: string; cliente: string }[];
+  alertas: string[];
+  atualizadoEm: string;
   temDados: boolean;
 };
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const formatBRL = (n: number) => "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const vazio = (): DashboardData => ({
   faturamento: 0, vendas: 0, ticketMedio: 0, orcAberto: 0, obrasExec: 0, aReceber: 0,
-  evolucao: [], meta: 0, realizado: 0, vendasRecentes: [], melhoresVendedores: [], funil: [], temDados: false,
+  faturamentoAnterior: 0, deltaFaturamentoPct: 0,
+  evolucao: [], meta: 0, realizado: 0, vendasRecentes: [], melhoresVendedores: [], funil: [],
+  porLoja: [], obrasAndamento: [], agendaHoje: [], alertas: [], atualizadoEm: "", temDados: false,
 });
 
 export async function getDashboard(periodo: "hoje" | "semana" | "mes" | "ano" = "mes", storeId?: string): Promise<DashboardData> {
@@ -91,10 +100,48 @@ export async function getDashboard(periodo: "hoje" | "semana" | "mes" | "ano" = 
     ];
     const funil = funChaves.map((f) => ({ ...f, n: rows.filter((r) => (r.situacao || r.status) === f.chave).length }));
 
+    // Período anterior (mesma duração) para variação % do faturamento
+    const durMs = agora.getTime() - ini.getTime();
+    const iniAnterior = new Date(ini.getTime() - durMs);
+    const faturamentoAnterior = confirmadas
+      .filter((r) => { const x = new Date(r.created_at); return x >= iniAnterior && x < ini; })
+      .reduce((s, r) => s + (Number(r.total) || 0), 0);
+    const deltaFaturamentoPct = faturamentoAnterior > 0
+      ? Math.round(((faturamento - faturamentoAnterior) / faturamentoAnterior) * 1000) / 10
+      : (faturamento > 0 ? 100 : 0);
+
+    // Comparativo por loja/operação (faturamento confirmado no período)
+    const { data: storesAll } = await c.supabase.from("stores").select("id,nome");
+    const lojaNome: Record<string, string> = {}; (storesAll || []).forEach((s) => { lojaNome[s.id as string] = s.nome as string; });
+    const porLojaMap: Record<string, number> = {};
+    confPeriodo.forEach((r) => { const k = (r.store_id as string) || ""; porLojaMap[k] = (porLojaMap[k] || 0) + (Number(r.total) || 0); });
+    const porLoja = Object.entries(porLojaMap).map(([id, total]) => ({ loja: lojaNome[id] || "—", total: Math.round(total * 100) / 100 })).sort((a, b) => b.total - a.total);
+
+    // Obras em andamento (não concluídas)
+    let oq = c.supabase.from("obras").select("nome,status,progresso,customer_id,sale_id,store_id").neq("status", "concluida").order("created_at", { ascending: false }).limit(6);
+    if (storeId) oq = oq.eq("store_id", storeId);
+    const { data: obrasRows } = await oq;
+    const obrasAndamento = (obrasRows || []).map((o) => ({ nome: (o.nome as string) || "Obra", cliente: "", progresso: Number(o.progresso) || 0, status: (o.status as string) || "aguardando" }));
+
+    // Agenda de hoje
+    const hojeStr = agora.toISOString().slice(0, 10);
+    let aq = c.supabase.from("agenda_eventos").select("hora,tipo,cliente_nome,store_id").eq("data", hojeStr).order("hora").limit(8);
+    if (storeId) aq = aq.eq("store_id", storeId);
+    const { data: agRows } = await aq;
+    const agendaHoje = (agRows || []).map((e) => ({ hora: (e.hora as string) || "", tipo: (e.tipo as string) || "visita", cliente: (e.cliente_nome as string) || "—" }));
+
+    // Alertas
+    const alertas: string[] = [];
+    if (orcAberto > 0) alertas.push(`${orcAberto} orçamento(s) em aberto aguardando decisão.`);
+    if (aReceber > 0) alertas.push(`${formatBRL(aReceber)} em contas a receber em aberto.`);
+    if (obrasExec > 0) alertas.push(`${obrasExec} venda(s) em produção/execução.`);
+
     return {
       faturamento: Math.round(faturamento * 100) / 100, vendas, ticketMedio: Math.round(ticketMedio * 100) / 100,
       orcAberto, obrasExec, aReceber: Math.round(aReceber * 100) / 100,
-      evolucao, meta, realizado: faturamento, vendasRecentes, melhoresVendedores, funil, temDados: true,
+      faturamentoAnterior: Math.round(faturamentoAnterior * 100) / 100, deltaFaturamentoPct,
+      evolucao, meta, realizado: faturamento, vendasRecentes, melhoresVendedores, funil,
+      porLoja, obrasAndamento, agendaHoje, alertas, atualizadoEm: agora.toISOString(), temDados: true,
     };
   } catch {
     return vazio(); // mock/sem sessão: zeros, sem dados fictícios
