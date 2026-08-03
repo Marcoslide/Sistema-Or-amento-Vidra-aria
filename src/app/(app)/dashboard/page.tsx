@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Percent, FileText, Tag, Clock, HardHat, Landmark, Plus } from "lucide-react";
 import { getDashboard, type DashboardData } from "@/lib/data/dashboard-actions";
+import { listLojasSel, type Opt } from "@/lib/data/vendas-core";
 import { formatCurrency } from "@/lib/format";
 import { labelSituacao } from "@/lib/commercial/situacao";
 
@@ -15,9 +16,12 @@ const PERIODOS: { v: Periodo; l: string }[] = [
 export default function DashboardPage() {
   const [d, setD] = useState<DashboardData | null>(null);
   const [periodo, setPeriodo] = useState<Periodo>("mes");
+  const [lojas, setLojas] = useState<Opt[]>([]);
+  const [lojaId, setLojaId] = useState("");
 
-  const carregar = useCallback((p: Periodo) => { getDashboard(p).then(setD).catch(() => setD(null)); }, []);
-  useEffect(() => { carregar(periodo); }, [carregar, periodo]);
+  const carregar = useCallback((p: Periodo, loja: string) => { getDashboard(p, loja || undefined).then(setD).catch(() => setD(null)); }, []);
+  useEffect(() => { carregar(periodo, lojaId); }, [carregar, periodo, lojaId]);
+  useEffect(() => { listLojasSel().then(setLojas).catch(() => {}); }, []);
 
   const maxEvol = useMemo(() => Math.max(1, ...((d?.evolucao || []).map((e) => e.valor))), [d]);
   const metaPct = d && d.meta > 0 ? Math.min(100, Math.round((d.realizado / d.meta) * 100)) : 0;
@@ -42,10 +46,16 @@ export default function DashboardPage() {
           </div>
           <Link href="/orcamentos/novo" className="v6-btn v6-btn-primary" style={{ marginLeft: "auto" }}><Plus /> Novo orçamento</Link>
         </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
           {PERIODOS.map((p) => (
             <button key={p.v} className={`v6-chip${periodo === p.v ? " active" : ""}`} onClick={() => setPeriodo(p.v)}>{p.l}</button>
           ))}
+          {lojas.length > 0 && (
+            <select className="v6-inp" style={{ height: 34, width: "auto", marginLeft: 4 }} value={lojaId} onChange={(e) => setLojaId(e.target.value)}>
+              <option value="">Todas as lojas</option>
+              {lojas.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+            </select>
+          )}
         </div>
       </div>
 

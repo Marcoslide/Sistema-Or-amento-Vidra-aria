@@ -22,13 +22,15 @@ const vazio = (): DashboardData => ({
   evolucao: [], meta: 0, realizado: 0, vendasRecentes: [], melhoresVendedores: [], funil: [], temDados: false,
 });
 
-export async function getDashboard(periodo: "hoje" | "semana" | "mes" | "ano" = "mes"): Promise<DashboardData> {
+export async function getDashboard(periodo: "hoje" | "semana" | "mes" | "ano" = "mes", storeId?: string): Promise<DashboardData> {
   try {
     const c = await getCtx();
-    const { data: sales } = await c.supabase
+    let sq = c.supabase
       .from("sales")
-      .select("id,numero,cliente_nome,vend_nome,situacao,status,venda_gerada,total,created_at")
+      .select("id,numero,cliente_nome,vend_nome,situacao,status,venda_gerada,total,created_at,store_id")
       .order("created_at", { ascending: false });
+    if (storeId) sq = sq.eq("store_id", storeId);
+    const { data: sales } = await sq;
     const rows = sales || [];
     if (!rows.length) return { ...vazio(), temDados: true };
 
@@ -49,8 +51,12 @@ export async function getDashboard(periodo: "hoje" | "semana" | "mes" | "ano" = 
     const obrasExec = rows.filter((r) => ["PRODUCAO", "EXECUCAO"].includes(r.situacao || r.status)).length;
 
     // a receber = títulos - recebimentos não estornados
-    const { data: recs } = await c.supabase.from("receivables").select("valor");
-    const { data: pays } = await c.supabase.from("receivable_payments").select("valor,estornado");
+    let rq = c.supabase.from("receivables").select("valor,store_id");
+    if (storeId) rq = rq.eq("store_id", storeId);
+    const { data: recs } = await rq;
+    let pq = c.supabase.from("receivable_payments").select("valor,estornado,store_id");
+    if (storeId) pq = pq.eq("store_id", storeId);
+    const { data: pays } = await pq;
     const totRec = (recs || []).reduce((s, r) => s + (Number(r.valor) || 0), 0);
     const totPago = (pays || []).filter((p) => !p.estornado).reduce((s, p) => s + (Number(p.valor) || 0), 0);
     const aReceber = Math.max(0, totRec - totPago);
