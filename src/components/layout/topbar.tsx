@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Menu, Search, Plus, Bell, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
@@ -21,14 +21,17 @@ function iniciais(nome: string): string {
 // Topbar portada da V6: busca, seletor de operação, Novo orçamento, sino, usuário.
 export function Topbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const { openMobile } = useNav();
   const [user, setUser] = useState<{ nome: string; email: string; roleNome: string; lojas: string[] }>({
     nome: "Usuário", email: "", roleNome: "", lojas: [],
   });
 
+  // Revalida o usuário logado a cada navegação; mantém o último valor válido (não volta a "Usuário").
   useEffect(() => {
-    if (hasSupabaseEnv()) meuResumo().then(setUser).catch(() => {});
-  }, []);
+    if (!hasSupabaseEnv()) return;
+    meuResumo().then((r) => { if (r && r.nome && r.nome !== "Usuário") setUser(r); }).catch(() => {});
+  }, [pathname]);
 
   async function sair() {
     if (hasSupabaseEnv()) { try { await createClient().auth.signOut(); } catch { /* ignora */ } }
