@@ -22,12 +22,13 @@ export type ParcelaRow = {
   vencimento: string | null; status: string; store_id: string;
   cliente_nome: string | null; numero: number | null; vend_nome: string | null;
 };
-export async function getReceberData(): Promise<{ ok: boolean; error?: string; parcelas?: ParcelaRow[]; canReceber?: boolean; canEstornar?: boolean }> {
+export async function getReceberData(saleId?: string): Promise<{ ok: boolean; error?: string; parcelas?: ParcelaRow[]; canReceber?: boolean; canEstornar?: boolean }> {
   try {
     const c = await getCtx();
     if (!(await ctxHasPerm(c, "fin.contas_receber"))) return { ok: false, error: "Sem permissão para Contas a Receber." };
-    const { data: recs } = await c.supabase
-      .from("receivables").select("id,sale_id,descricao,valor,vencimento,status,store_id").order("vencimento");
+    let q = c.supabase.from("receivables").select("id,sale_id,descricao,valor,vencimento,status,store_id").order("vencimento");
+    if (saleId) q = q.eq("sale_id", saleId);
+    const { data: recs } = await q;
     const ids = (recs || []).map((r) => r.id as string);
     const { data: pays } = ids.length
       ? await c.supabase.from("receivable_payments").select("receivable_id,valor,estornado").in("receivable_id", ids)
@@ -51,6 +52,66 @@ export async function getReceberData(): Promise<{ ok: boolean; error?: string; p
       };
     });
     return { ok: true, parcelas, canReceber: await ctxHasPerm(c, "fin.baixar"), canEstornar: await ctxHasPerm(c, "fin.estornar") };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+// ---- Contas a Receber por VENDA (paridade V6: 1 linha = 1 venda, agrega as parcelas) ----
+export type VendaReceberRow = {
+  sale_id: string; numero: number | null; cliente_nome: string | null; vend_nome: string | null;
+  store_id: string; loja_nome: string; total: number; recebido: number; saldo: number;
+  proxVencimento: string | null; situacao: "ABERTA" | "PARCIAL" | "QUITADA" | "VENCIDA";
+};
+export async function getReceberPorVenda(): Promise<{ ok: boolean; error?: string; vendas?: VendaReceberRow[]; canReceber?: boolean; canEstornar?: boolean }> {
+  try {
+    const c = await getCtx();
+    if (!(await ctxHasPerm(c, "fin.contas_receber"))) return { ok: false, error: "Sem permissão para Contas a Receber." };
+    const { data: recs } = await c.supabase.from("receivables").select("id,sale_id,valor,vencimento,status,store_id");
+    const rows = recs || [];
+    const ids = rows.map((r) => r.id as string);
+    const { data: pays } = ids.length
+      ? await c.supabase.from("receivable_payments").select("receivable_id,valor,estornado").in("receivable_id", ids)
+      : { data: [] as { receivable_id: string; valor: number; estornado: boolean }[] };
+    const pagoBy: Record<string, number> = {};
+    (pays || []).forEach((p) => { if (!p.estornado) pagoBy[p.receivable_id as string] = (pagoBy[p.receivable_id as string] || 0) + Number(p.valor); });
+
+    const saleIds = Array.from(new Set(rows.map((r) => r.sale_id).filter(Boolean))) as string[];
+    if (!saleIds.length) return { ok: true, vendas: [], canReceber: await ctxHasPerm(c, "fin.baixar"), canEstornar: await ctxHasPerm(c, "fin.estornar") };
+    const [{ data: sales }, { data: stores }] = await Promise.all([
+      c.supabase.from("sales").select("id,numero,cliente_nome,vend_nome,store_id").in("id", saleIds),
+      c.supabase.from("stores").select("id,nome"),
+    ]);
+    const lojaBy: Record<string, string> = {}; (stores || []).forEach((s) => { lojaBy[s.id as string] = s.nome as string; });
+    const hoje = new Date().toISOString().slice(0, 10);
+
+    const bySale: Record<string, { total: number; recebido: number; proxVenc: string | null; temVencida: boolean }> = {};
+    rows.forEach((r) => {
+      const sid = r.sale_id as string; if (!sid) return;
+      const valor = Number(r.valor) || 0; const recebido = Number(pagoBy[r.id as string] || 0);
+      const saldo = valor - recebido;
+      const venc = (r.vencimento as string) || null;
+      const agg = (bySale[sid] ||= { total: 0, recebido: 0, proxVenc: null, temVencida: false });
+      agg.total += valor; agg.recebido += recebido;
+      if (saldo > 0.005) {
+        if (venc && venc < hoje) agg.temVencida = true;
+        if (venc && (!agg.proxVenc || venc < agg.proxVenc)) agg.proxVenc = venc;
+      }
+    });
+
+    const vendas: VendaReceberRow[] = (sales || []).map((s) => {
+      const agg = bySale[s.id as string] || { total: 0, recebido: 0, proxVenc: null, temVencida: false };
+      const saldo = Math.round((agg.total - agg.recebido) * 100) / 100;
+      let situacao: VendaReceberRow["situacao"] = "ABERTA";
+      if (saldo <= 0.005) situacao = "QUITADA";
+      else if (agg.temVencida) situacao = "VENCIDA";
+      else if (agg.recebido > 0.005) situacao = "PARCIAL";
+      return {
+        sale_id: s.id as string, numero: (s.numero as number) ?? null, cliente_nome: (s.cliente_nome as string) || null,
+        vend_nome: (s.vend_nome as string) || null, store_id: (s.store_id as string) || "", loja_nome: lojaBy[s.store_id as string] || "—",
+        total: Math.round(agg.total * 100) / 100, recebido: Math.round(agg.recebido * 100) / 100, saldo,
+        proxVencimento: agg.proxVenc, situacao,
+      };
+    });
+    return { ok: true, vendas, canReceber: await ctxHasPerm(c, "fin.baixar"), canEstornar: await ctxHasPerm(c, "fin.estornar") };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 
