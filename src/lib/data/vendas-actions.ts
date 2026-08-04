@@ -189,6 +189,16 @@ export async function mudarSituacao(id: string, nova: string, obs?: string): Pro
     }
     if (atual === nova) return { ok: true, id }; // idempotente: clicar duas vezes não duplica
 
+    // ---- INICIAR PRODUÇÃO: "Em produção" DEVE criar a Ordem de Produção (não só mudar o texto) ----
+    // Delega à RPC idempotente fn_iniciar_producao, que cria a OP + etapas + itens e define situacao=PRODUCAO.
+    if (nova === "PRODUCAO") {
+      const { error: rpcErr } = await c.supabase.rpc("fn_iniciar_producao", { p_sale_id: id, p_etapas: null });
+      if (rpcErr) return { ok: false, error: "Não foi possível iniciar a produção: " + rpcErr.message };
+      await c.supabase.from("sale_status_history").insert({ organization_id: c.org, sale_id: id, campo: "situacao", de: atual, para: "PRODUCAO", user_id: c.uid, obs: obs || null });
+      await ctxAudit(c, "Comercial", "Iniciou produção (OP criada)", id);
+      return { ok: true, id };
+    }
+
     const { error } = await c.supabase.from("sales").update({ situacao: nova, updated_at: new Date().toISOString() }).eq("id", id);
     if (error) return { ok: false, error: error.message };
     await c.supabase.from("sale_status_history").insert({ organization_id: c.org, sale_id: id, campo: "situacao", de: atual, para: nova, user_id: c.uid, obs: obs || null });
