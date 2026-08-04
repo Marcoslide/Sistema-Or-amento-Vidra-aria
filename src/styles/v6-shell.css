@@ -129,6 +129,16 @@
 .v6-shell .v6-brand .v6-logo img, .v6-brand .v6-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .v6-shell .v6-brand .v6-logo-img, .v6-brand .v6-logo-img { width: auto; height: 34px; max-width: 150px; object-fit: contain; display: block; }
 
+/* ---------- Impressão (PDF): imprime SÓ o documento, nunca a tela/app ---------- */
+/* Antes o print incluía sidebar+topbar (parecia captura de tela). Aqui ocultamos o shell. */
+@media print {
+  .v6-sidebar, .v6-topbar, .v6-scrim { display: none !important; }
+  .v6-shell { display: block !important; }
+  .v6-main { margin: 0 !important; }
+  .v6-content { padding: 0 !important; background: #fff !important; }
+  body { background: #fff !important; }
+}
+
 /* ---------- Mobile (drawer), igual à V6 ---------- */
 .v6-scrim { display: none; }
 @media (max-width: 960px) {

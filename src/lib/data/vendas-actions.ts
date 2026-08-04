@@ -5,6 +5,28 @@ import { calcOrc, custoProdutosOrc, margemOrc, type OrcamentoCalc, type Regra } 
 
 // ====================== COMERCIAL — server actions ======================
 
+// Cadastro RÁPIDO de cliente (dentro do orçamento). Persiste em customers e retorna id+nome.
+export async function criarClienteRapido(dados: {
+  tipo?: string; nome: string; doc?: string; tel?: string; whatsapp?: string; email?: string;
+  cep?: string; logradouro?: string; cidade?: string; uf?: string; store_id?: string;
+}): Promise<{ ok: boolean; error?: string; id?: string; nome?: string }> {
+  try {
+    const c = await getCtx();
+    const nome = (dados.nome || "").trim();
+    if (!nome) return { ok: false, error: "Informe o nome/razão social." };
+    const { data, error } = await c.supabase.from("customers").insert({
+      organization_id: c.org, store_id: dados.store_id || null, tipo: dados.tipo || "PF", nome,
+      doc: dados.doc || null, tel: dados.tel || null, whatsapp: dados.whatsapp || null, email: dados.email || null,
+      cep: dados.cep || null, logradouro: dados.logradouro || null, cidade: dados.cidade || null, uf: dados.uf || null,
+      ativo: true, created_by: c.uid,
+    }).select("id,nome").single();
+    if (error) return { ok: false, error: error.message };
+    await ctxAudit(c, "Clientes", "Cadastro rápido no orçamento", nome);
+    return { ok: true, id: data?.id as string, nome: data?.nome as string };
+  } catch (e) { return { ok: false, error: (e as Error).message }; }
+}
+
+
 export type MedidaIn = { l?: number; a?: number; q?: number; unit?: string };
 export type ItemIn = { product_id: string | null; regra: string; desc_pct?: number; preco_override?: number | null; medidas: MedidaIn[] };
 export type AmbienteIn = { nome: string; itens: ItemIn[] };

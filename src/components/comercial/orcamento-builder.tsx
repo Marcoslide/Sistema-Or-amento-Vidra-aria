@@ -15,7 +15,8 @@ import {
 } from "@/lib/data/vendas-core";
 import { minhasPermissoes } from "@/lib/data/server-ctx";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
-import { salvarOrcamento, type OrcamentoIn } from "@/lib/data/vendas-actions";
+import { salvarOrcamento, criarClienteRapido, type OrcamentoIn } from "@/lib/data/vendas-actions";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   calcOrc, margemOrc, totalItem, memoMedida,
   type OrcamentoCalc, type Regra,
@@ -54,6 +55,7 @@ export function OrcamentoBuilder({ inicial }: { inicial?: VendaFull }) {
   const [storeId, setStoreId] = useState(inicial?.store_id || "");
   const [clienteId, setClienteId] = useState(inicial?.cliente_id || "");
   const [clienteNome, setClienteNome] = useState(inicial?.cliente_nome || "");
+  const [novoClienteOpen, setNovoClienteOpen] = useState(false);
   const [obraNome, setObraNome] = useState(inicial?.obra_nome || "");
   const [obraEndereco, setObraEndereco] = useState(inicial?.obra_endereco || "");
   const [sellerId, setSellerId] = useState(inicial?.seller_id || "");
@@ -215,7 +217,14 @@ export function OrcamentoBuilder({ inicial }: { inicial?: VendaFull }) {
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label>Cliente *</Label>
+              <div className="flex items-center justify-between">
+                <Label>Cliente *</Label>
+                {!bloqueado && (
+                  <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline" onClick={() => setNovoClienteOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" /> Novo cliente
+                  </button>
+                )}
+              </div>
               <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={clienteId} onChange={(e) => clienteSel(e.target.value)}>
                 <option value="">— selecione / avulso —</option>
                 {clientes.map((c) => (<option key={c.id} value={c.id}>{c.nome}</option>))}
@@ -448,6 +457,64 @@ export function OrcamentoBuilder({ inicial }: { inicial?: VendaFull }) {
         </CardContent>
       </Card>
       </div>
+
+      <NovoClienteDialog
+        open={novoClienteOpen}
+        storeId={storeId}
+        onClose={() => setNovoClienteOpen(false)}
+        onCriado={(id, nome) => {
+          setClientes((prev) => [...prev, { id, nome }].sort((a, b) => a.nome.localeCompare(b.nome)));
+          setClienteId(id); setClienteNome(nome); setNovoClienteOpen(false);
+        }}
+      />
     </div>
+  );
+}
+
+// Cadastro RÁPIDO de cliente dentro do orçamento — não perde os dados já digitados.
+function NovoClienteDialog({ open, storeId, onClose, onCriado }: {
+  open: boolean; storeId: string; onClose: () => void; onCriado: (id: string, nome: string) => void;
+}) {
+  const [f, setF] = useState({ tipo: "PF", nome: "", doc: "", tel: "", whatsapp: "", email: "", cep: "", logradouro: "", cidade: "", uf: "" });
+  const [saving, setSaving] = useState(false); const [err, setErr] = useState("");
+  const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
+
+  async function salvar() {
+    if (!f.nome.trim()) { setErr("Informe o nome/razão social."); return; }
+    setSaving(true);
+    const r = await criarClienteRapido({ ...f, store_id: storeId || undefined });
+    setSaving(false);
+    if (r.ok && r.id) { onCriado(r.id, r.nome || f.nome); setF({ tipo: "PF", nome: "", doc: "", tel: "", whatsapp: "", email: "", cep: "", logradouro: "", cidade: "", uf: "" }); }
+    else setErr(r.error || "Não foi possível cadastrar o cliente.");
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Cadastro rápido de cliente</DialogTitle></DialogHeader>
+        {err && <p className="text-sm text-destructive">{err}</p>}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Tipo</Label>
+            <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={f.tipo} onChange={(e) => set("tipo", e.target.value)}>
+              <option value="PF">Pessoa física</option><option value="PJ">Pessoa jurídica</option>
+            </select>
+          </div>
+          <div className="space-y-1.5"><Label>{f.tipo === "PJ" ? "CNPJ" : "CPF"}</Label><Input value={f.doc} onChange={(e) => set("doc", e.target.value)} /></div>
+          <div className="space-y-1.5 sm:col-span-2"><Label>{f.tipo === "PJ" ? "Razão social / nome" : "Nome"} *</Label><Input value={f.nome} onChange={(e) => set("nome", e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>Telefone</Label><Input value={f.tel} onChange={(e) => set("tel", e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>WhatsApp</Label><Input value={f.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} /></div>
+          <div className="space-y-1.5 sm:col-span-2"><Label>E-mail</Label><Input value={f.email} onChange={(e) => set("email", e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>CEP</Label><Input value={f.cep} onChange={(e) => set("cep", e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>Endereço</Label><Input value={f.logradouro} onChange={(e) => set("logradouro", e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>Cidade</Label><Input value={f.cidade} onChange={(e) => set("cidade", e.target.value)} /></div>
+          <div className="space-y-1.5"><Label>UF</Label><Input maxLength={2} value={f.uf} onChange={(e) => set("uf", e.target.value)} /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={salvar} disabled={saving}>{saving ? "Salvando…" : "Salvar e selecionar"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
