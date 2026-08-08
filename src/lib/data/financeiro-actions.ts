@@ -178,12 +178,13 @@ export async function getCaixaData(storeId?: string): Promise<{ ok: boolean; err
 export type PagarRow = {
   id: string; descricao: string; fornecedor: string | null; categoria: string | null; category_id: string | null; valor: number;
   pago: number; saldo: number; vencimento: string | null; store_id: string; cancelada: boolean;
+  ocorrencia: string; created_at: string;
 };
 export async function getPagarData(): Promise<{ ok: boolean; error?: string; contas?: PagarRow[]; canPagar?: boolean; canEstornar?: boolean; canExcluir?: boolean }> {
   try {
     const c = await getCtx();
     if (!(await ctxHasPerm(c, "fin.contas_pagar"))) return { ok: false, error: "Sem permissão para Contas a Pagar." };
-    const { data: pbs } = await c.supabase.from("payables").select("id,descricao,fornecedor,categoria,category_id,valor,vencimento,store_id,cancelada").order("vencimento");
+    const { data: pbs } = await c.supabase.from("payables").select("id,descricao,fornecedor,categoria,category_id,valor,vencimento,store_id,cancelada,ocorrencia,created_at").order("vencimento");
     const ids = (pbs || []).map((p) => p.id as string);
     const { data: pays } = ids.length
       ? await c.supabase.from("payable_payments").select("payable_id,valor,estornado").in("payable_id", ids)
@@ -196,6 +197,7 @@ export async function getPagarData(): Promise<{ ok: boolean; error?: string; con
         id: p.id as string, descricao: (p.descricao as string) || "Despesa", fornecedor: (p.fornecedor as string) || null,
         categoria: (p.categoria as string) || null, category_id: (p.category_id as string) || null, valor, pago, saldo: Math.round((valor - pago) * 100) / 100,
         vencimento: (p.vencimento as string) || null, store_id: p.store_id as string, cancelada: Boolean(p.cancelada),
+        ocorrencia: (p.ocorrencia as string) || "Única", created_at: (p.created_at as string) || "",
       };
     });
     return { ok: true, contas, canPagar: await ctxHasPerm(c, "fin.contas_pagar"), canEstornar: await ctxHasPerm(c, "fin.estornar"), canExcluir: await ctxHasPerm(c, "fin.excluir_contas") };

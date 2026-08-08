@@ -17,6 +17,7 @@
     "test:datas": "node --test --experimental-strip-types tests/commercial/datas.test.ts",
     "test:obras": "node --test --experimental-strip-types tests/obras/calc.test.ts",
     "test:periodo": "node --test --experimental-strip-types tests/commercial/periodo.test.ts",
+    "test:pagar": "node --test --experimental-strip-types tests/financial/situacao-pagar.test.ts",
     "test:staging": "node --test tests/integration/staging.test.mjs"
   },
   "dependencies": {

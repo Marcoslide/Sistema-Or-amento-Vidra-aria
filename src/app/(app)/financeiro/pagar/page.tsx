@@ -13,9 +13,24 @@ import {
 } from "@/lib/data/financeiro-actions";
 import { listLojasSel, type Opt } from "@/lib/data/vendas-core";
 import { listAtivos } from "@/lib/data/cadastro-core";
+import { dentroPeriodo, PERIODOS } from "@/lib/periodo";
+import { situacaoConta, type SituacaoPagar } from "@/lib/financeiro/situacao-pagar";
 
-type FormPagar = { descricao: string; fornecedor: string; categoria: string; category_id: string; valor: string; vencimento: string; store_id: string };
-const vazio: FormPagar = { descricao: "", fornecedor: "", categoria: "", category_id: "", valor: "0", vencimento: "", store_id: "" };
+type FormPagar = { descricao: string; fornecedor: string; categoria: string; category_id: string; valor: string; vencimento: string; store_id: string; ocorrencia: string };
+const vazio: FormPagar = { descricao: "", fornecedor: "", categoria: "", category_id: "", valor: "0", vencimento: "", store_id: "", ocorrencia: "Única" };
+const OCORRENCIAS = ["Única", "Semanal", "Quinzenal", "Mensal", "Anual", "Parcelada"];
+
+type Situacao = "" | SituacaoPagar;
+const SITUACOES: { v: Situacao; l: string }[] = [
+  { v: "", l: "Situação: todas" }, { v: "aberta", l: "Em aberto" }, { v: "vencida", l: "Vencidas" },
+  { v: "vence_hoje", l: "Vencem hoje" }, { v: "parcial", l: "Parcialmente pagas" }, { v: "paga", l: "Pagas" }, { v: "cancelada", l: "Canceladas" },
+];
+const ORDENS = [
+  { v: "venc_proximo", l: "Vencimento mais próximo" }, { v: "venc_distante", l: "Vencimento mais distante" },
+  { v: "recentes", l: "Mais recentes" }, { v: "antigos", l: "Mais antigos" },
+  { v: "maior", l: "Maior valor" }, { v: "menor", l: "Menor valor" },
+];
+const LS_ORDEM = "vg_pagar_ordem";
 
 type StatusInfo = { label: string; style: React.CSSProperties };
 function statusConta(c: PagarRow): StatusInfo {
@@ -37,6 +52,8 @@ export default function PagarPage() {
   const [lojas, setLojas] = useState<Opt[]>([]);
   const [categorias, setCategorias] = useState<Array<{ id: string; nome: string }>>([]);
   const [erro, setErro] = useState(""); const [msg, setMsg] = useState(""); const [q, setQ] = useState("");
+  const [sit, setSit] = useState<Situacao>(""); const [periodo, setPeriodo] = useState("");
+  const [ordem, setOrdem] = useState("venc_proximo");
   const [form, setForm] = useState<FormPagar | null>(null); const [editId, setEditId] = useState<string | null>(null);
   const [pay, setPay] = useState<PagarRow | null>(null); const [valorPay, setValorPay] = useState(""); const [formaPay, setFormaPay] = useState("Pix");
   const [busy, setBusy] = useState(false);
@@ -54,12 +71,31 @@ export default function PagarPage() {
     carregar();
     listLojasSel().then(setLojas).catch(() => {});
     listAtivos("financial_categories", "id,nome").then(setCategorias).catch(() => {});
+    try { const o = sessionStorage.getItem(LS_ORDEM); if (o) setOrdem(o); } catch { /* ignora */ }
   }, [carregar]);
+  useEffect(() => { try { sessionStorage.setItem(LS_ORDEM, ordem); } catch { /* ignora */ } }, [ordem]);
 
   const lista = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return contas.filter((c) => !s || c.descricao.toLowerCase().includes(s) || (c.fornecedor || "").toLowerCase().includes(s) || (c.categoria || "").toLowerCase().includes(s));
-  }, [contas, q]);
+    const base = contas.filter((c) => {
+      const mq = !s || c.descricao.toLowerCase().includes(s) || (c.fornecedor || "").toLowerCase().includes(s) || (c.categoria || "").toLowerCase().includes(s);
+      const ms = !sit || situacaoConta(c) === sit;
+      const mp = dentroPeriodo(c.created_at, periodo);
+      return mq && ms && mp;
+    });
+    // Reordena reativamente: uma conta nova entra sempre na posição correta do critério ativo.
+    return [...base].sort((a, b) => {
+      if (ordem === "maior") return b.valor - a.valor;
+      if (ordem === "menor") return a.valor - b.valor;
+      if (ordem === "recentes" || ordem === "antigos") {
+        const da = new Date(a.created_at).getTime(), db = new Date(b.created_at).getTime();
+        return ordem === "antigos" ? da - db : db - da;
+      }
+      // vencimento (padrão): sem data vai para o fim
+      const va = a.vencimento || "9999-99-99", vb = b.vencimento || "9999-99-99";
+      return ordem === "venc_distante" ? vb.localeCompare(va) : va.localeCompare(vb);
+    });
+  }, [contas, q, sit, periodo, ordem]);
   const totalAberto = useMemo(() => lista.reduce((s, c) => s + (c.cancelada ? 0 : c.saldo), 0), [lista]);
 
   async function salvar() {
@@ -121,8 +157,17 @@ export default function PagarPage() {
       </div>
 
       <div className="v6-card" style={{ marginTop: 16 }}>
-        <div className="v6-card-b" style={{ paddingBottom: 0 }}>
-          <div className="v6-search" style={{ maxWidth: 360 }}><Search /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar descrição, fornecedor ou categoria..." /></div>
+        <div className="v6-card-b" style={{ paddingBottom: 0, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="v6-search" style={{ maxWidth: 300 }}><Search /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar descrição, fornecedor ou categoria..." /></div>
+          <select style={{ ...ctrl, width: "auto" }} value={sit} onChange={(e) => setSit(e.target.value as Situacao)}>
+            {SITUACOES.map((s) => <option key={s.v} value={s.v}>{s.l}</option>)}
+          </select>
+          <select style={{ ...ctrl, width: "auto" }} value={periodo} onChange={(e) => setPeriodo(e.target.value)}>
+            {PERIODOS.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
+          </select>
+          <select style={{ ...ctrl, width: "auto" }} value={ordem} onChange={(e) => setOrdem(e.target.value)}>
+            {ORDENS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+          </select>
         </div>
         <div className="v6-card-b" style={{ overflowX: "auto" }}>
           <table className="v6-tbl" style={{ minWidth: 820 }}>
@@ -149,7 +194,7 @@ export default function PagarPage() {
                         <DropdownMenuTrigger asChild><button className="v6-icon-btn" style={{ width: 30, height: 30, border: 0, background: "transparent" }}><MoreHorizontal size={16} /></button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           {perm.pagar && c.saldo > 0 && !c.cancelada && <DropdownMenuItem onClick={() => abrirPagar(c)}>Pagar</DropdownMenuItem>}
-                          <DropdownMenuItem onClick={() => { setForm({ descricao: c.descricao, fornecedor: c.fornecedor || "", categoria: c.categoria || "", category_id: c.category_id || "", valor: String(c.valor), vencimento: c.vencimento || "", store_id: c.store_id }); setEditId(c.id); }}>Editar</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setForm({ descricao: c.descricao, fornecedor: c.fornecedor || "", categoria: c.categoria || "", category_id: c.category_id || "", valor: String(c.valor), vencimento: c.vencimento || "", store_id: c.store_id, ocorrencia: c.ocorrencia || "Única" }); setEditId(c.id); }}>Editar</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => abrirVer(c)}>Pagamentos</DropdownMenuItem>
                           {perm.excluir && <><DropdownMenuSeparator /><DropdownMenuItem className="text-destructive" onClick={() => excluir(c)}>Excluir</DropdownMenuItem></>}
                         </DropdownMenuContent>
@@ -181,6 +226,12 @@ export default function PagarPage() {
               </div>
               <div><label style={lbl}>Valor (R$)</label><input style={ctrl} type="number" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} /></div>
               <div><label style={lbl}>Vencimento</label><input style={ctrl} type="date" value={form.vencimento} onChange={(e) => setForm({ ...form, vencimento: e.target.value })} /></div>
+              <div>
+                <label style={lbl}>Ocorrência</label>
+                <select style={ctrl} value={form.ocorrencia} onChange={(e) => setForm({ ...form, ocorrencia: e.target.value })}>
+                  {OCORRENCIAS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
               <div style={{ gridColumn: "1 / -1" }}><label style={lbl}>Loja *</label>
                 <select style={ctrl} value={form.store_id} onChange={(e) => setForm({ ...form, store_id: e.target.value })}>
                   <option value="">— selecione —</option>
