@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Plus, CheckSquare, Square, CalendarDays, Save } from "lucide-react";
+import { ArrowLeft, Plus, CheckSquare, Square, CalendarDays } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { formatDate } from "@/lib/format";
-import { getObra, setStatusObra, addChecklist, toggleChecklist, addDiario, salvarObra, type ObraFull } from "@/lib/data/obras-actions";
+import { getObra, setStatusObra, addChecklist, toggleChecklist, addDiario, type ObraFull } from "@/lib/data/obras-actions";
 
 const STATUS = [
   { v: "aguardando", l: "Aguardando" },
@@ -21,26 +21,19 @@ export default function ObraDetailPage() {
   const [erro, setErro] = useState("");
   const [novoItem, setNovoItem] = useState("");
   const [novaEntrada, setNovaEntrada] = useState("");
-  const [progresso, setProgresso] = useState(0);
 
   const carregar = useCallback(() => {
-    getObra(params.id).then((r) => { if (r.ok && r.data) { setO(r.data); setProgresso(r.data.progresso); setErro(""); } else setErro(r.error || "Obra não encontrada."); });
+    getObra(params.id).then((r) => { if (r.ok && r.data) { setO(r.data); setErro(""); } else setErro(r.error || "Obra não encontrada."); });
   }, [params.id]);
   useEffect(() => { carregar(); }, [carregar]);
 
   async function mudarStatus(status: string) {
-    const r = await setStatusObra(params.id, status, progresso);
+    const r = await setStatusObra(params.id, status);
     if (r.ok) { toast({ variant: status === "concluida" ? "success" : "info", title: "Status atualizado" }); carregar(); }
     else toast({ variant: "warning", title: "Falha", description: r.error || "" });
   }
-  async function salvarProgresso() {
-    if (!o) return;
-    const r = await salvarObra({ id: o.id, nome: o.nome, progresso });
-    if (r.ok) { toast({ variant: "success", title: "Progresso salvo" }); carregar(); }
-    else toast({ variant: "warning", title: "Falha", description: r.error || "" });
-  }
   async function addItem() { if (!novoItem.trim()) return; const r = await addChecklist(params.id, novoItem); if (r.ok) { setNovoItem(""); carregar(); } else toast({ variant: "warning", title: "Falha", description: r.error || "" }); }
-  async function toggleItem(id: string, feito: boolean) { await toggleChecklist(id, feito); carregar(); }
+  async function toggleItem(id: string, feito: boolean) { await toggleChecklist(params.id, id, feito); carregar(); }
   async function addEntrada() { if (!novaEntrada.trim()) return; const r = await addDiario(params.id, novaEntrada); if (r.ok) { setNovaEntrada(""); carregar(); } else toast({ variant: "warning", title: "Falha", description: r.error || "" }); }
 
   if (erro) return <div className="v6-card" style={{ padding: 16, color: "#b91c1c" }}>{erro}</div>;
@@ -84,14 +77,15 @@ export default function ObraDetailPage() {
         {/* Coluna lateral: progresso + checklist */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="v6-card">
-            <div className="v6-card-h"><div className="v6-card-title">Progresso</div></div>
+            <div className="v6-card-h"><div className="v6-card-title">Progresso</div><div className="v6-card-desc">Calculado automaticamente pela conclusão dos itens do checklist.</div></div>
             <div className="v6-card-b">
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <input type="range" min={0} max={100} value={progresso} onChange={(e) => setProgresso(Number(e.target.value))} style={{ flex: 1, accentColor: "var(--v6-primary)" }} />
-                <b style={{ width: 44, textAlign: "right" }}>{progresso}%</b>
+                <div style={{ flex: 1, height: 10, background: "#eef2f7", borderRadius: 999 }}>
+                  <div style={{ width: `${o.progresso}%`, height: "100%", background: "var(--v6-primary)", borderRadius: 999, transition: "width .2s" }} />
+                </div>
+                <b style={{ width: 44, textAlign: "right" }}>{o.progresso}%</b>
               </div>
-              <button className="v6-btn v6-btn-outline v6-btn-sm" style={{ marginTop: 12 }} onClick={salvarProgresso}><Save size={14} /> Salvar progresso</button>
-              {o.prazo && <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--v6-muted)" }}>Prazo: {formatDate(o.prazo)}</div>}
+              {o.prazo && <div style={{ marginTop: 12, fontSize: 12.5, color: "var(--v6-muted)" }}>Prazo: {formatDate(o.prazo)}</div>}
               {o.responsavel && <div style={{ fontSize: 12.5, color: "var(--v6-muted)" }}>Responsável: {o.responsavel}</div>}
             </div>
           </div>

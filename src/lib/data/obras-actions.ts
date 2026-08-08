@@ -1,6 +1,16 @@
 "use server";
 
 import { getCtx, ctxHasPerm, ctxAudit } from "@/lib/data/server-ctx";
+import { progressoChecklist } from "@/lib/obras/calc";
+
+// Recalcula obras.progresso a partir do checklist real (fonte única de verdade).
+// Nunca editável manualmente pelo usuário — sempre derivado do andamento dos itens.
+async function recalcularProgresso(c: Awaited<ReturnType<typeof getCtx>>, obraId: string) {
+  const { data: itens } = await c.supabase.from("obra_checklist").select("feito").eq("obra_id", obraId);
+  const pct = progressoChecklist((itens || []).map((i) => ({ feito: Boolean(i.feito) })));
+  await c.supabase.from("obras").update({ progresso: pct }).eq("id", obraId).eq("organization_id", c.org);
+  return pct;
+}
 
 // ============================================================
 // Obras — acompanhamento operacional (paridade V6). SEM valores financeiros.
@@ -86,7 +96,8 @@ export async function getObra(id: string): Promise<{ ok: boolean; error?: string
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 
-export async function salvarObra(dados: { id?: string; nome: string; endereco?: string; responsavel?: string; prazo?: string; store_id?: string; sale_id?: string; customer_id?: string; status?: string; progresso?: number }): Promise<{ ok: boolean; error?: string; id?: string }> {
+// progresso NÃO é parâmetro aqui: é sempre derivado do checklist (recalcularProgresso), nunca editável manualmente.
+export async function salvarObra(dados: { id?: string; nome: string; endereco?: string; responsavel?: string; prazo?: string; store_id?: string; sale_id?: string; customer_id?: string; status?: string }): Promise<{ ok: boolean; error?: string; id?: string }> {
   try {
     const c = await getCtx();
     if (!(await ctxHasPerm(c, "obras.ver"))) return { ok: false, error: "Sem permissão." };
@@ -97,7 +108,6 @@ export async function salvarObra(dados: { id?: string; nome: string; endereco?: 
       customer_id: dados.customer_id || null,
     };
     if (dados.status) patch.status = dados.status;
-    if (dados.progresso != null) patch.progresso = Math.max(0, Math.min(100, Number(dados.progresso) || 0));
     if (dados.id) {
       const { error } = await c.supabase.from("obras").update(patch).eq("id", dados.id).eq("organization_id", c.org);
       if (error) return { ok: false, error: error.message };
@@ -112,14 +122,14 @@ export async function salvarObra(dados: { id?: string; nome: string; endereco?: 
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 
-export async function setStatusObra(id: string, status: string, progresso?: number): Promise<{ ok: boolean; error?: string }> {
+// progresso não é parâmetro: "concluida" força 100% (consequência do status, não edição manual do percentual).
+export async function setStatusObra(id: string, status: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const c = await getCtx();
     if (status === "concluida" && !(await ctxHasPerm(c, "obras.finalizar"))) return { ok: false, error: "Sem permissão para finalizar obra." };
     if (!(await ctxHasPerm(c, "obras.ver"))) return { ok: false, error: "Sem permissão." };
     const patch: Record<string, unknown> = { status };
     if (status === "concluida") patch.progresso = 100;
-    else if (progresso != null) patch.progresso = Math.max(0, Math.min(100, progresso));
     const { error } = await c.supabase.from("obras").update(patch).eq("id", id).eq("organization_id", c.org);
     if (error) return { ok: false, error: error.message };
     await ctxAudit(c, "Obras", "Alterou status da obra", `${id} → ${status}`);
@@ -127,20 +137,24 @@ export async function setStatusObra(id: string, status: string, progresso?: numb
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 
-export async function addChecklist(obraId: string, texto: string): Promise<{ ok: boolean; error?: string }> {
+export async function addChecklist(obraId: string, texto: string): Promise<{ ok: boolean; error?: string; progresso?: number }> {
   try {
     const c = await getCtx();
     if (!texto?.trim()) return { ok: false, error: "Informe o item." };
     const { error } = await c.supabase.from("obra_checklist").insert({ organization_id: c.org, obra_id: obraId, texto: texto.trim() });
-    return error ? { ok: false, error: error.message } : { ok: true };
+    if (error) return { ok: false, error: error.message };
+    const progresso = await recalcularProgresso(c, obraId);
+    return { ok: true, progresso };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 
-export async function toggleChecklist(id: string, feito: boolean): Promise<{ ok: boolean; error?: string }> {
+export async function toggleChecklist(obraId: string, id: string, feito: boolean): Promise<{ ok: boolean; error?: string; progresso?: number }> {
   try {
     const c = await getCtx();
     const { error } = await c.supabase.from("obra_checklist").update({ feito }).eq("id", id).eq("organization_id", c.org);
-    return error ? { ok: false, error: error.message } : { ok: true };
+    if (error) return { ok: false, error: error.message };
+    const progresso = await recalcularProgresso(c, obraId);
+    return { ok: true, progresso };
   } catch (e) { return { ok: false, error: (e as Error).message }; }
 }
 

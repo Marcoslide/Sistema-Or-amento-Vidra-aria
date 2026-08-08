@@ -130,7 +130,8 @@ export default function DocumentosPage() {
 
         {tipo === "termo" && (
           <div className="space-y-3 pt-4 text-sm leading-relaxed">
-            <p className="text-center text-base font-bold">TERMO DE ENTREGA E RECEBIMENTO</p>
+            {/* Título de largura variável: nunca corta nem ultrapassa a margem, independente do tamanho do texto. */}
+            <p className="mx-auto max-w-full whitespace-normal break-words px-2 text-center text-[15px] font-bold leading-snug sm:text-base">TERMO DE ENTREGA, CONFERÊNCIA E RESPONSABILIDADE</p>
             <p>Declaramos que os itens referentes ao pedido nº {venda.numero ?? ""}, do(a) cliente <b>{cliente?.nome || venda.cliente_nome}</b>{venda.obra_nome ? `, obra ${venda.obra_nome}` : ""}, foram entregues{venda.obra_endereco ? ` no endereço ${venda.obra_endereco}` : ""} e recebidos em conformidade.</p>
             <p>O CONTRATANTE declara ter conferido os produtos/serviços e atesta o recebimento sem ressalvas, salvo as anotações abaixo.</p>
             <div className="mt-3 rounded border p-3 text-xs text-neutral-500" style={{ minHeight: 70 }}>Observações / ressalvas:</div>
