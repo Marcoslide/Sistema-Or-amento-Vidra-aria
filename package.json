@@ -16,6 +16,7 @@
     "test:fluxo": "node --test --experimental-strip-types tests/commercial/situacao.test.ts",
     "test:datas": "node --test --experimental-strip-types tests/commercial/datas.test.ts",
     "test:obras": "node --test --experimental-strip-types tests/obras/calc.test.ts",
+    "test:periodo": "node --test --experimental-strip-types tests/commercial/periodo.test.ts",
     "test:staging": "node --test tests/integration/staging.test.mjs"
   },
   "dependencies": {

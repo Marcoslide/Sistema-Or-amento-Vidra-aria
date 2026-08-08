@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { listVendasRicas, type VendaRica } from "@/lib/data/vendas-core";
 import { duplicarOrcamento, excluirOuCancelarVenda } from "@/lib/data/vendas-actions";
 import { labelSituacao } from "@/lib/commercial/situacao";
+import { dentroPeriodo, PERIODOS } from "@/lib/periodo";
 
 const ABAS = [
   { v: "TODOS", l: "Todos" }, { v: "ORCAMENTO", l: "Orçamentos" }, { v: "VENDA_CONFIRMADA", l: "Vendas confirmadas" },
@@ -17,11 +18,30 @@ const ABAS = [
   { v: "EXECUCAO", l: "Em execução" }, { v: "FINALIZADA", l: "Finalizados" }, { v: "CANCELADO", l: "Cancelados" },
 ];
 
+// Ordenação e período (paridade V6 + persistência da preferência durante a sessão do navegador).
+const ORDENS = [
+  { v: "recentes", l: "Mais recentes" }, { v: "antigos", l: "Mais antigos" },
+  { v: "maior", l: "Maior valor" }, { v: "menor", l: "Menor valor" },
+];
+const LS_ORDEM = "vg_vendas_ordem", LS_PERIODO = "vg_vendas_periodo";
+
 export default function VendasPage() {
   const [rows, setRows] = useState<VendaRica[]>([]);
   const [erro, setErro] = useState(""); const [msg, setMsg] = useState("");
   const [q, setQ] = useState(""); const [aba, setAba] = useState("TODOS");
   const [fVend, setFVend] = useState(""); const [fFin, setFFin] = useState("");
+  const [ordem, setOrdem] = useState("recentes");
+  const [periodo, setPeriodo] = useState("");
+
+  // preferência de ordenação/período persiste durante a sessão (sessionStorage), sem precisar de F5.
+  useEffect(() => {
+    try {
+      const o = sessionStorage.getItem(LS_ORDEM); if (o) setOrdem(o);
+      const p = sessionStorage.getItem(LS_PERIODO); if (p) setPeriodo(p);
+    } catch { /* sessionStorage indisponível: usa padrão */ }
+  }, []);
+  useEffect(() => { try { sessionStorage.setItem(LS_ORDEM, ordem); } catch { /* ignora */ } }, [ordem]);
+  useEffect(() => { try { sessionStorage.setItem(LS_PERIODO, periodo); } catch { /* ignora */ } }, [periodo]);
 
   const carregar = useCallback(() => {
     listVendasRicas().then((d) => { setRows(d); setErro(""); }).catch((e) => { setRows([]); setErro((e as Error).message); });
@@ -33,14 +53,22 @@ export default function VendasPage() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return rows.filter((o) => {
+    const base = rows.filter((o) => {
       const mq = !s || (o.cliente_nome || "").toLowerCase().includes(s) || String(o.numero ?? "").includes(s) || (o.vend_nome || "").toLowerCase().includes(s);
       const ma = aba === "TODOS" || o.situacao === aba;
       const mv = !fVend || o.vend_nome === fVend;
       const mf = !fFin || finLabel(o) === fFin;
-      return mq && ma && mv && mf;
+      const mp = dentroPeriodo(o.created_at, periodo);
+      return mq && ma && mv && mf && mp;
     });
-  }, [rows, q, aba, fVend, fFin]);
+    // Reordena reativamente a cada mudança de `rows` — uma venda nova entra sempre na posição correta.
+    return [...base].sort((a, b) => {
+      if (ordem === "maior") return b.total - a.total;
+      if (ordem === "menor") return a.total - b.total;
+      const da = new Date(a.created_at).getTime(), db = new Date(b.created_at).getTime();
+      return ordem === "antigos" ? da - db : db - da; // "recentes" (padrão)
+    });
+  }, [rows, q, aba, fVend, fFin, periodo, ordem]);
 
   const conta = (chave: string) => rows.filter((o) => o.situacao === chave).length;
   const cards = [
@@ -108,6 +136,12 @@ export default function VendasPage() {
             <option value="A receber">A receber</option>
             <option value="Parcial">Parcial</option>
             <option value="Recebido">Recebido</option>
+          </select>
+          <select className="v6-inp" style={{ height: 38, width: "auto" }} value={periodo} onChange={(e) => setPeriodo(e.target.value)}>
+            {PERIODOS.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
+          </select>
+          <select className="v6-inp" style={{ height: 38, width: "auto" }} value={ordem} onChange={(e) => setOrdem(e.target.value)}>
+            {ORDENS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
           </select>
         </div>
         <div className="v6-card-b" style={{ overflowX: "auto" }}>
